@@ -21,7 +21,7 @@ Node.js powers the React development and build workflow. Python owns the applica
 
 ## Start the project
 
-Prerequisites: Python 3.12+, Node.js 22+, npm, and Bash. These versions are available in the prepared cloud environment. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
+Prerequisites: Python 3.12+, Node.js 22+, and npm. The Bash helper scripts below are for Linux/macOS/WSL; native Windows CMD instructions follow. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
 
 ```bash
 cd /workspace/DemoRoyalBlinds
@@ -32,6 +32,34 @@ bash scripts/start.sh
 React runs on port **5173**, FastAPI on **8000**. FastAPI's interactive API documentation is at `/docs` on the backend. Keep the terminal running; Ctrl+C stops both services. The starter checks for occupied ports and fails rather than launching a duplicate instance.
 
 The complete app works immediately with a local JSON report store in `.runtime/reports.json`. Without an API key, the interface explicitly says **Rule-based demo**: LangGraph coordinates specialist rules and tools, but no LLM runs. Reports survive a service restart; processes do not.
+
+### Windows Command Prompt
+
+From the repository root (the folder containing both `backend` and `frontend`):
+
+```cmd
+py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r backend\requirements.lock.txt
+if not exist backend\.env copy backend\.env.example backend\.env
+cd frontend
+npm ci --include=dev
+```
+
+Open two CMD windows, each starting in the repository root. In the backend window:
+
+```cmd
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+In the frontend window:
+
+```cmd
+cd frontend
+npm run dev
+```
+
+If you created `.venv` inside `backend` instead, run `.venv\Scripts\python.exe -m pip install -r requirements.lock.txt` and `.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000` from that backend folder. Do not add another `backend\` prefix to the requirements path. The dependency list includes `tzdata`, which supplies the `Asia/Dubai` time zone on Windows; no system time-zone database is assumed.
 
 ## Enable real AI reasoning
 
