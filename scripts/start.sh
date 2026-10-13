@@ -2,11 +2,12 @@
 set -euo pipefail
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
-if [[ ! -x .venv/bin/python || ! -d frontend/node_modules ]]; then
+if [[ ! -x backend/.venv/bin/python || ! -d frontend/node_modules ]] || ! command -v uv >/dev/null 2>&1; then
   echo 'Run bash scripts/setup.sh first.' >&2
   exit 1
 fi
-.venv/bin/python - <<'PY'
+export UV_CACHE_DIR="$project_root/.runtime/uv-cache"
+uv run --locked --project backend python - <<'PY'
 import socket
 for port in (8000, 5173):
     with socket.socket() as sock:
@@ -26,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-(cd backend && exec ../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000) &
+(cd backend && exec .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000) &
 api_pid=$!
 (cd frontend && exec node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173 --strictPort) &
 ui_pid=$!

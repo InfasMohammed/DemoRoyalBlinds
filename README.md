@@ -21,7 +21,7 @@ Node.js powers the React development and build workflow. Python owns the applica
 
 ## Start the project
 
-Prerequisites: Python 3.12+, Node.js 22+, and npm. The Bash helper scripts below are for Linux/macOS/WSL; native Windows CMD instructions follow. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
+Prerequisites: uv, Python 3.12, Node.js 22+, and npm. uv manages the backend's environment and dependencies using `backend/pyproject.toml` and `backend/uv.lock`. The Bash helper scripts below are for Linux/macOS/WSL; native Windows CMD instructions follow. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
 
 ```bash
 cd /workspace/DemoRoyalBlinds
@@ -31,35 +31,38 @@ bash scripts/start.sh
 
 React runs on port **5173**, FastAPI on **8000**. FastAPI's interactive API documentation is at `/docs` on the backend. Keep the terminal running; Ctrl+C stops both services. The starter checks for occupied ports and fails rather than launching a duplicate instance.
 
-The complete app works immediately with a local JSON report store in `.runtime/reports.json`. Without an API key, the interface explicitly says **Rule-based demo**: LangGraph coordinates specialist rules and tools, but no LLM runs. Reports survive a service restart; processes do not.
+The complete app works immediately with a local JSON report store in `.runtime/reports.json`. Without an API key, the interface explicitly says **Rule-based demo**: LangGraph coordinates specialist rules and tools, but no LLM runs. Reports survive a service restart; processes do not. uv creates or reuses `backend/.venv`; no manual activation is required. Python is pinned to 3.12, the supported and tested runtime for this project.
 
 ### Windows Command Prompt
 
-From the repository root (the folder containing both `backend` and `frontend`):
+Install the uv manager once using your existing Python 3.12 installation:
 
 ```cmd
-py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r backend\requirements.lock.txt
-if not exist backend\.env copy backend\.env.example backend\.env
-cd frontend
-npm ci --include=dev
+py -3.12 -m pip install uv
 ```
 
-Open two CMD windows, each starting in the repository root. In the backend window:
+Using `py -3.12 -m uv` avoids needing uv's executable directory on Windows PATH. Stop any existing backend with Ctrl+C. From the repository root (the folder containing both `backend` and `frontend`), open the backend CMD window:
 
 ```cmd
 cd backend
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+py -3.12 -m uv sync --locked
+if not exist .env copy .env.example .env
+py -3.12 -m uv run --locked uvicorn app.main:app --reload --port 8000
 ```
 
-In the frontend window:
+In a second CMD window, starting in the repository root:
 
 ```cmd
 cd frontend
+npm ci --include=dev
 npm run dev
 ```
 
-If you created `.venv` inside `backend` instead, run `.venv\Scripts\python.exe -m pip install -r requirements.lock.txt` and `.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000` from that backend folder. Do not add another `backend\` prefix to the requirements path. The dependency list includes `tzdata`, which supplies the `Asia/Dubai` time zone on Windows; no system time-zone database is assumed.
+If your CMD prompt already ends in `DemoRoyalBlinds\backend`, skip `cd backend`. uv reuses a compatible `.venv` there and synchronizes its packages to the lockfile. Existing `.env` files and local reports are preserved. An old repository-root `.venv` is no longer used by the helper scripts; it need not be deleted. The dependency list includes `tzdata`, which supplies the `Asia/Dubai` time zone on Windows.
+
+On Linux/macOS/WSL, the equivalent backend commands are `cd backend`, `uv sync --locked`, and `uv run --locked uvicorn app.main:app --reload --port 8000`. Install uv using your platform's official installer or `python3 -m pip install uv` in a writable Python environment. The cloud machine already provides uv. `--locked` prevents setup from silently changing dependency versions.
+
+`pyproject.toml` is the canonical dependency definition; `uv.lock` records the resolved versions, platforms and artifact hashes. For dependency changes, use `uv add <package>` or edit the manifest and run `uv lock`, then sync and run tests. Keep the pip-compatible export current with `uv export --locked --no-emit-project --output-file requirements.lock.txt` from `backend`. `requirements.txt` delegates to that generated, hashed export; it is not a second dependency definition.
 
 ## Enable real AI reasoning
 
@@ -126,7 +129,7 @@ Dates are calculated using the current Dubai date, so calendar results vary with
 ```bash
 # Backend calculations, graph execution, API, persistence and approval enforcement
 cd /workspace/DemoRoyalBlinds/backend
-../.venv/bin/python -m pytest -q
+uv run --locked pytest -q
 
 # TypeScript and production frontend build
 cd /workspace/DemoRoyalBlinds/frontend
@@ -187,11 +190,13 @@ SQL seeds the source text; it does not generate embeddings. Once `SUPABASE_URL`,
 
 ```bash
 cd /workspace/DemoRoyalBlinds
-.venv/bin/python backend/scripts/index_knowledge.py
+uv run --locked --project backend python backend/scripts/index_knowledge.py
 ```
 
 The script checks corpus consistency, skips already indexed passages, generates `text-embedding-3-small` embeddings, writes them with a content predicate, and verifies a self-match through the RPC. It makes paid embedding requests to the provider. Only after it succeeds, set `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` on the backend and restart. Confirm an actual response reports `retrieval_mode=supabase_vector`; configuration alone is not verification.
 
 The knowledge API is `GET /api/knowledge/portfolio` and `POST /api/knowledge/ask`. The latter accepts `question`, optional `category` (`internal`, `external`, `smart`, `company`) and optional `product_id` from the portfolio. It returns answer mode, actual retrieval mode, source passages, provenance and review requirements.
 
-For future source edits, change the reviewed JSON and rebuild the migration with `.venv/bin/python backend/scripts/export_knowledge_sql.py`. Review the generated migration before applying it. Approved product datasheets and manuals should become a separately identified source class before adding engineering-dependent decisions; the current corpus contains marketing context only.
+For future source edits, change the reviewed JSON and rebuild the migration with `uv run --locked --project backend python backend/scripts/export_knowledge_sql.py`. Review the generated migration before applying it. Approved product datasheets and manuals should become a separately identified source class before adding engineering-dependent decisions; the current corpus contains marketing context only.
+
+On Windows, substitute `py -3.12 -m uv` for `uv` in the validation and knowledge-indexing commands above.

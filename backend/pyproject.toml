@@ -1,0 +1,28 @@
+[project]
+name = "rbdemo-backend"
+version = "0.1.0"
+description = "Royal Blinds multi-agent operations and product knowledge API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.115.12",
+    "uvicorn==0.34.2",
+    "langgraph==0.4.8",
+    "langchain-openai==0.3.19",
+    "supabase==2.32.0",
+    "python-dotenv==1.1.0",
+    "tzdata==2026.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+    "httpx==0.28.1",
+]
+
+[tool.uv]
+package = false
+# Preserve the previously tested transitive versions during the uv migration.
+constraint-dependencies = [
+    "langsmith==0.8.5",
+    "websockets==14.2",
+]
