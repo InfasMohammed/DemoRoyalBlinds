@@ -1,0 +1,82 @@
+{
+  "provenance": "Website text and links supplied by the user; pages were not independently fetched.",
+  "source_kind": "user_supplied_website_copy",
+  "captured_on": "2026-10-13",
+  "categories": [
+    {"id": "internal", "name": "Internal Shades", "description": "Blinds and curtains for residential and commercial interiors.", "source_url": "https://www.royalblinds.com/internal-shades/"},
+    {"id": "external", "name": "External Shades", "description": "Outdoor shading, architectural structures and outdoor furnishings.", "source_url": "https://www.royalblinds.com/external-shades/"},
+    {"id": "smart", "name": "Smart Solutions", "description": "Automation and controls that can accompany internal and external products; compatibility must be confirmed.", "source_url": "https://www.royalblinds.com/"}
+  ],
+  "products": [
+    {"id": "roller_blinds", "name": "Roller Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/roller-blinds/", "quote_products": ["manual_roller", "motorized_roller"]},
+    {"id": "venetian_blinds", "name": "Venetian Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/venetian-blinds/", "quote_products": []},
+    {"id": "wooden_blinds", "name": "Wooden Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/wooden-blinds/", "quote_products": []},
+    {"id": "vertical_blinds", "name": "Vertical Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/vertical-blinds/", "quote_products": []},
+    {"id": "roman_blinds", "name": "Roman Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/roman-blinds/", "quote_products": []},
+    {"id": "zebra_roller_blinds", "name": "Zebra Roller Blinds", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/zebra-roller-blinds/", "quote_products": []},
+    {"id": "curtains", "name": "Curtains", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/curtains/", "quote_products": ["curtain"]},
+    {"id": "cubicle_curtains", "name": "Cubicle Curtains", "category": "internal", "source_url": "https://royalblinds.com/internal-shades/cubicle-curtains/", "quote_products": []},
+    {"id": "car_parking_shades", "name": "Car Parking Shades", "category": "external", "source_url": "https://royalblinds.com/external-shades/car-parking-shades/", "quote_products": []},
+    {"id": "sail_shades", "name": "Sail Shades", "category": "external", "source_url": "https://royalblinds.com/external-shades/sail-shades/", "quote_products": []},
+    {"id": "bioclimatic_pergolas", "name": "Bioclimatic Pergolas", "category": "external", "source_url": "https://royalblinds.com/external-shades/bioclimatic-pergolas/", "quote_products": []},
+    {"id": "tensile_shade_structures", "name": "Tensile Shade Structures", "category": "external", "source_url": "https://royalblinds.com/external-shades/tensile-shade-structures/", "quote_products": []},
+    {"id": "awnings", "name": "Awnings", "category": "external", "source_url": "https://royalblinds.com/external-shades/awnings/", "quote_products": []},
+    {"id": "outdoor_furniture", "name": "Outdoor Furniture", "category": "external", "source_url": "https://royalblinds.com/external-shades/outdoor-furniture/", "quote_products": []},
+    {"id": "umbrellas", "name": "Umbrellas", "category": "external", "source_url": "https://royalblinds.com/external-shades/umbrellas/", "quote_products": []}
+  ],
+  "documents": [
+    {
+      "id": "RB-INTERNAL", "title": "Internal Shades — portfolio", "category": "internal",
+      "source_url": "https://www.royalblinds.com/internal-shades/", "product_ids": [],
+      "sections": [
+        {"heading": "Interior applications", "text": "Transform your home's interior with the exquisite collection of blinds and curtains from Royal Blinds LLC, available in Dubai and Abu Dhabi. Our internal shades blend functionality with comfort, adding a stylish touch to any room. With a diverse range of designs—modern, traditional, simple, and sleek, we ensure a perfect fit for every style. Our window blinds elevate the ambiance of your home or office, providing both comfort and style. With a vast collection of customizable internal shades and curtains, we cater to your specific preferences."},
+        {"heading": "Internal product range", "text": "Explore our extensive range of blinds, including Roller Blinds, Venetian Blinds, Wooden Blinds, Vertical Blinds, Roman Blinds, and Zebra Blinds, available in both motorized and manual versions. Experience a welcoming atmosphere with our beautifully designed blinds. If you seek made-to-measure internal shades in Dubai to refresh your home, we are the premier manufacturers and suppliers, delivering top-quality shades across the UAE. The supplied Types of Internal Shades listing also includes Curtains and Cubicle Curtains."},
+        {"heading": "Made-to-measure interiors", "text": "As the demand for blinds grows for both commercial and residential use, our products stand out with their beautiful designs, quality fabrics, and reliable technologies. Elevate your interiors and enhance your comfort with the exceptional blinds and curtains from Royal Blinds LLC."}
+      ]
+    },
+    {
+      "id": "RB-EXTERNAL", "title": "External Shades — applications and portfolio", "category": "external",
+      "source_url": "https://www.royalblinds.com/external-shades/", "product_ids": [],
+      "sections": [
+        {"heading": "Outdoor applications", "text": "Transform your outdoor spaces with Royal Blinds' top-of-the-line external blinds and shades, designed to protect you and your belongings from wind, rain, sun, and insects. Our products not only enhance the aesthetic appeal of your home but also provide essential functionality. Protect your furniture from dirt and dust, and enjoy the added security of side-welded zips that lock the fabric firmly into side tracks, creating the perfect outdoor sanctuary for BBQ areas, patios, balconies, front porches, and windows."},
+        {"heading": "Membrane shade structures", "text": "Experience the highest quality fabric structures and expert craftsmanship with our custom-made tension membrane shade sails and structures. Ideal for commercial and residential applications, these shades are perfect for schools, playgrounds, swimming pools, sporting venues, shop facades, shopping centers, car parks, clubs, hotels, walkways, villas, and patios. Our reputation for delivering first-class structures and continuously developing designs to meet client needs sets us apart in the industry."},
+        {"heading": "External product range", "text": "Enhance your outdoor living with our retractable shades, tensile shades, pergolas, awnings, and other exterior shade products. Made from durable, long-lasting fabric, our blinds withstand the elements and are easy to maintain. Our Screeny Horizontal Blinds provide excellent shade for outdoor areas, windows, decks, and patios. We also offer stunning canopies in various shapes, colors, and sizes tailored to outdoor applications in the UAE. The supplied Types of External Shades listing includes Car Parking Shades, Sail Shades, Bioclimatic Pergolas, Tensile Shade Structures, Awnings, Outdoor Furniture and Umbrellas."},
+        {"heading": "Commercial awnings and shutters", "text": "For commercial-style awnings, we supply fully wind-rated options that are architecturally designed, technologically advanced, and simple to use. Made in Italy with international certifications and patents, these designer awnings blend innovative style and technique, suitable for both classic and modern architecture. In addition to external shade products, we offer high-quality aluminum roller shutter covers for doors and windows in three systems: electric motorized, manual, and electric motorized with manual control."},
+        {"heading": "Heat filtering and customisation", "text": "Our external shades are engineered to keep your space cool during summers by reflecting heat and filtering wind, making them an excellent choice for energy savings. The versatile designs, themes, patterns, materials, and colors ensure they complement any setting. These are category-level marketing statements; no quantified energy savings, test reports or model-specific performance data were supplied."}
+      ]
+    },
+    {
+      "id": "RB-SMART", "title": "Smart Solutions — automation and control", "category": "smart",
+      "source_url": "https://www.royalblinds.com/", "product_ids": [],
+      "sections": [
+        {"heading": "Integrated automation", "text": "Unique solutions, blending technology, innovation, quality, and design. Automation and control systems for awnings, blinds, curtains and skylight now with integrated management through smart intuitive interfaces: practical, functional and elegant solutions for the ideal way to live in every space."},
+        {"heading": "Remote and smartphone operation", "text": "Motorized Blinds and Shades are usually operated by remote control. To allow you total control of your blinds when you are at home or away you can even add a Smartphone control functionality that provides you with the same comfortable shading of a roller blind, but with the convenience of having full control at your fingertips."},
+        {"heading": "Roller blind power options", "text": "With a huge selection of fabrics and designs to choose from, our Smart Solutions are the ideal choice in terms of the technology behind the aesthetics. Driven by an integrated motor that is hidden from sight, our motorized roller blinds can be powered by a rechargeable battery or directly from your mains supply."},
+        {"heading": "Design and installation support", "text": "Architects, Designers and Engineers find their ideal partner in Royal Blinds, always ready to provide complete support during project design, installation and implementation."},
+        {"heading": "Unnamed Solution 1", "text": "One of the most preferred blinds for both commercial and residential spaces. Our manufacturing process does not involve the use of adhesives or sewing to produce clean and professionally finished blinds. The supplied copy labels this only Solution 1; its exact product/model is not identified."},
+        {"heading": "Solution 2 — Venetian blinds", "text": "Custom crafted Venetian Blinds, in a variety of exciting colors, are engineered with durability to give a dependable and longer trouble-free performance. Our raw materials and motors are imported from the USA and Europe."},
+        {"heading": "Reported privacy and light-control benefits", "text": "The supplied Smart Solutions copy describes privacy and reduced sunlight, dust and pollutants, and claims UV and IR protection for sun shades and drapes. No numerical light transmission, UV/IR ratings or test reports were supplied. These marketing benefits must not be treated as universal protection guarantees or verified performance for every product."}
+      ]
+    },
+    {
+      "id": "RB-COMPANY", "title": "Royal Blinds — company profile", "category": "company",
+      "source_url": "https://www.royalblinds.com/", "product_ids": [],
+      "sections": [
+        {"heading": "Company background", "text": "Established in 1989 in Dubai, UAE, and wholly owned by the Al Jallaf Family, Royal Blinds has garnered recognition as a One Stop Centre for innovative, meticulously designed, and expertly installed internal and external shades. Royal Blinds is affiliated with the Dubai Chamber of Commerce and Abu Dhabi Chamber of Commerce. It supplies property developers and contractors and provides consultations to architecture and design firms."},
+        {"heading": "Production and regional presence", "text": "With our expansive 124,800 square feet production unit located in Dubai's Al Quoz industrial area, alongside a branch in Abu Dhabi and dedicated business channels across the Gulf States, we ensure seamless fulfillment of diverse client needs. The supplied milestone timeline records expansion into Kuwait, Bahrain, Saudi and Oman in 2008 and establishment of the External Shades section in 2005."},
+        {"heading": "Reported certifications", "text": "The supplied website copy reports ISO-QMS-9001, ISO-EMS-14001 and OHSAS 18001 certifications. No certificate numbers, current certificates, expiry dates or product-specific certification documents were supplied."},
+        {"heading": "Contact and locations", "text": "Dubai: head office, showroom and factory. Abu Dhabi: office and showroom. Contact email: info@royalblinds.com. Dubai telephone: +971 4 347 4760. Abu Dhabi telephone: +971 2 555 7393."},
+        {"heading": "Company milestones and website counters", "text": "The supplied timeline lists: inception in 1989; Al Quoz premises in 1990; high-profile projects in 1997; fire recovery and premise expansion in 1998; manufacturing plant in 1999; 100 employees in 2001; External Shades section in 2005; Gulf expansion in 2008; CSR initiatives in 2015; 30th anniversary in 2019. Supplied counters report 50+ Projects Launched, 10000+ Happy Clients and 43+ Worldwide Partners, with more than 43 partners in over 20 countries. The project-counter explanation refers to 49 new projects in 2019. These historical marketing figures are not independently verified current operating metrics."}
+      ]
+    }
+  ],
+  "limitations": [
+    "This content is company website copy supplied by the user, not independently verified engineering documentation.",
+    "Product listings establish portfolio membership, not model-specific performance or compatibility.",
+    "Generic wind, rain, heat, UV and insect protection claims do not establish a rating for every product.",
+    "No motor model, torque, voltage, IP rating, smart-home protocol, app brand or device compatibility list was supplied.",
+    "No current prices, component stock, bills of materials, warranties or installation manuals were supplied.",
+    "Smart Solutions is an automation layer across applicable products, not confirmation that every listed product is motorized.",
+    "Current estimating tools support roller blinds and manual-track curtains only; other products need technical and commercial assessment."
+  ]
+}

@@ -27,3 +27,9 @@ class ApprovalRequest(BaseModel):
 class AgentNarrative(BaseModel):
     summary: str = Field(max_length=700)
     recommendation: str = Field(max_length=700)
+
+
+class KnowledgeQuery(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+    category: Literal['internal', 'external', 'smart', 'company'] | None = None
+    product_id: str | None = Field(default=None, max_length=60)

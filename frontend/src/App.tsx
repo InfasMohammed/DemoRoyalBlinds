@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Box, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, Factory,
-  FileText, Layers3, LayoutDashboard, LoaderCircle, Package, Plus, Printer, ScanLine,
+  BookOpen, FileText, Layers3, LayoutDashboard, LoaderCircle, Package, Plus, Printer, ScanLine,
   Settings2, ShieldCheck, Sparkles, Workflow, X } from 'lucide-react'
 import { api } from './api'
+import KnowledgeStudio from './KnowledgeStudio'
 import type { Catalog, Health, ProjectInput, Report } from './types'
 
 const money = (value: number) => new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
@@ -123,7 +124,7 @@ export default function App() {
       </a>
       <div className="workspace-label">WORKSPACE <span>DEMO</span></div>
       <nav aria-label="Main navigation">
-        {[{ id: 'workspace', name: 'Project studio', icon: LayoutDashboard }, { id: 'projects', name: 'Project reports', icon: Layers3 },
+        {[{ id: 'workspace', name: 'Project studio', icon: LayoutDashboard }, { id: 'knowledge', name: 'Product knowledge', icon: BookOpen }, { id: 'projects', name: 'Project reports', icon: Layers3 },
           { id: 'inventory', name: 'Material library', icon: Box }, { id: 'workflow', name: 'Agent workflow', icon: Workflow }].map(item =>
           <button key={item.id} className={`nav-item ${page === item.id ? 'active' : ''}`} onClick={() => setPage(item.id)}>
             <item.icon size={19} />{item.name}{item.id === 'projects' && <span className="nav-count">{reports.length}</span>}
@@ -134,16 +135,23 @@ export default function App() {
       <div className="sidebar-bottom"><span className="avatar">RB</span><div>Interview demonstration<small>Synthetic factory data</small></div></div>
     </aside>
     <div className="main-shell">
-      <header className="topbar no-print"><div className="breadcrumb">Operations <ChevronRight size={14} /><strong>{({ workspace: 'Project studio', projects: 'Project reports', inventory: 'Material library', workflow: 'Agent workflow' } as Record<string, string>)[page]}</strong></div>
+      <header className="topbar no-print"><div className="breadcrumb">Operations <ChevronRight size={14} /><strong>{({ workspace: 'Project studio', knowledge: 'Product knowledge', projects: 'Project reports', inventory: 'Material library', workflow: 'Agent workflow' } as Record<string, string>)[page]}</strong></div>
         <div className="topbar-right"><span className={`connection ${health ? '' : 'offline'}`}><i />{health ? 'Backend connected' : 'Connecting'}</span><span className="topbar-divider" /><span className="location">Dubai, UAE</span><span className="small-avatar">RB</span></div>
       </header>
       <main>
         {error && <div role="alert" className="error-banner no-print"><CircleAlert size={18} /><span>{error}</span><button onClick={() => void load()}>Retry connection</button><button aria-label="Dismiss error" onClick={() => setError('')}><X size={16} /></button></div>}
-        <div className="page-heading no-print"><div><div className="eyebrow">MANUFACTURING INTELLIGENCE</div><h1>{({ workspace: 'From brief to better execution.', projects: 'Every project. Every decision.', inventory: 'The right material, in view.', workflow: 'A team of focused specialists.' } as Record<string, string>)[page]}</h1>
-          <p>{({ workspace: 'Plan blinds and curtains with a transparent, coordinated workflow.', projects: 'Revisit saved estimates, evidence and review decisions.', inventory: 'Illustrative fabric stock and supplier lead times for your demonstration.', workflow: 'See how LangGraph connects calculations, evidence and human review.' } as Record<string, string>)[page]}</p></div>
+        <div className="page-heading no-print"><div><div className="eyebrow">MANUFACTURING INTELLIGENCE</div><h1>{({ workspace: 'From brief to better execution.', knowledge: 'Product expertise, with evidence.', projects: 'Every project. Every decision.', inventory: 'The right material, in view.', workflow: 'A team of focused specialists.' } as Record<string, string>)[page]}</h1>
+          <p>{({ workspace: 'Plan blinds and curtains with a transparent, coordinated workflow.', knowledge: 'Explore the complete supplied portfolio and retrieve source-linked answers.', projects: 'Revisit saved estimates, evidence and review decisions.', inventory: 'Illustrative fabric stock and supplier lead times for your demonstration.', workflow: 'See how LangGraph connects calculations, evidence and human review.' } as Record<string, string>)[page]}</p></div>
           <button className="button primary" onClick={() => newProject()} disabled={!health || !catalog || busy}><Plus size={17} />New project</button>
         </div>
         <div className="demo-strip no-print"><span><span className="pill neutral">INTERVIEW DEMO</span>All inventory, rates and capacity are illustrative.</span><span>{health ? modeLabel(health.reasoning_mode) : 'Checking runtime'}<span className="dot-separator">·</span>{health ? health.storage_mode === 'supabase' ? 'Supabase storage' : 'Local demo storage' : 'Storage unverified'}</span></div>
+
+        {page === 'knowledge' && <KnowledgeStudio quoteReady={!!health && !!catalog && !busy} onQuote={product => {
+          if (!health) return
+          const next = seed(health.today, 'ready')
+          setInput({ ...next, product, brief: product === 'curtain' ? 'Supply and install manual-track curtains for 24 office openings. Confirm fabric sample, measurements and delivery before approval.' : next.brief })
+          setEditing(true)
+        }} />}
 
         {page === 'workspace' && (!report ? <>
           <section className="hero card"><div className="hero-copy"><span className="pill green"><Sparkles size={13} /> YOUR OPERATIONS COPILOT</span><h2>One customer brief.<br /><em>A complete project picture.</em></h2>
@@ -153,6 +161,7 @@ export default function App() {
             <div className="hero-visual" aria-label="Illustration of roller blinds"><div className="window-frame"><div className="blinds"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div><div className="window-light" /><div className="window-pull" /></div>
               <div className="floating-card"><span className="floating-icon"><Check size={18} /></span><div>Clarity before commitment<small>Material · Cost · Delivery</small></div></div><span className="visual-caption">DESIGNED FOR YOUR WORKFLOW</span></div>
           </section>
+          <section className="card portfolio-callout"><BookOpen size={24} /><div><h3>Internal. External. Smart.</h3><p>Explore 15 listed product types and automation options with source-linked company knowledge.</p></div><button className="button secondary" onClick={() => setPage('knowledge')}>Explore products <ArrowUpRight size={16} /></button></section>
           <div className="section-heading"><h3>Try a manufacturing scenario</h3><span>Start with a brief. See the decisions.</span></div>
           <div className="scenario-grid">{[
             { id: 'shortage', icon: Package, title: 'The fabric shortfall', category: 'MATERIAL PLANNING', desc: '24 motorized blinds. Limited blackout stock. Find a viable alternative.', color: 'amber' },
@@ -189,7 +198,7 @@ export default function App() {
           </div></div>}
           {tab === 'agents' && <section className="card agent-findings"><div className="section-heading"><div><span className="eyebrow">TRACEABLE EXECUTION</span><h3>What each specialist found</h3></div><span className="pill neutral">{modeLabel(report.reasoning_mode)}</span></div><p className="muted">Validated tools control numbers and approval gates. Optional AI explains the findings using the supplied evidence.</p>{report.traces.map((item, i) => {
             const Icon = agents.find(a => item.agent.startsWith(a.name))?.icon || Workflow
-            return <article className="trace-card" key={item.agent}><div className="trace-index">{String(i + 1).padStart(2, '0')}</div><div className="trace-content"><div className="trace-heading"><h3><Icon size={19} />{item.agent}</h3><span className={`pill ${item.mode === 'rules_fallback' ? 'amber' : 'neutral'}`}>{item.mode === 'llm' ? 'AI + tools' : item.mode === 'rules_fallback' ? 'Rules · AI unavailable' : 'Validated rules'}</span></div><div className="trace-role">{item.role} · {item.duration_ms} ms</div><p>{item.summary}</p>{item.recommendation && <p className="recommendation">{item.recommendation}</p>}<div className="source-tags">{item.sources.map(source => <span key={source}><FileText size={12} />{source}</span>)}</div><button className="text-link evidence-toggle" aria-expanded={expanded === item.agent} onClick={() => setExpanded(expanded === item.agent ? null : item.agent)}>Inspect tool evidence <ChevronDown size={15} /></button>{expanded === item.agent && <pre className="evidence">{JSON.stringify(item.facts, null, 2)}</pre>}</div></article>
+            return <article className="trace-card" key={item.agent}><div className="trace-index">{String(i + 1).padStart(2, '0')}</div><div className="trace-content"><div className="trace-heading"><h3><Icon size={19} />{item.agent}</h3><span className={`pill ${item.mode === 'rules_fallback' ? 'amber' : 'neutral'}`}>{item.mode === 'llm' ? 'AI + tools' : item.mode === 'rules_fallback' ? 'Rules · AI unavailable' : 'Validated rules'}</span></div><div className="trace-role">{item.role} · {item.duration_ms} ms</div><p>{item.summary}</p>{item.recommendation && <p className="recommendation">{item.recommendation}</p>}<div className="source-tags">{item.sources.map(source => <span key={source}><FileText size={12} />{source}</span>)}</div>{item.citations && item.citations.length > 0 && <div className="trace-citations">{item.citations.map(citation => <a href={citation.source_url} key={citation.id} target="_blank" rel="noopener noreferrer"><BookOpen size={12} />{citation.heading}<ArrowUpRight size={12} /></a>)}</div>}<button className="text-link evidence-toggle" aria-expanded={expanded === item.agent} onClick={() => setExpanded(expanded === item.agent ? null : item.agent)}>Inspect tool evidence <ChevronDown size={15} /></button>{expanded === item.agent && <pre className="evidence">{JSON.stringify(item.facts, null, 2)}</pre>}</div></article>
           })}</section>}
           {tab === 'quote' && <div className="report-grid quote-grid"><section className="card quote-card"><div className="section-heading"><div><span className="eyebrow">DRAFT · ILLUSTRATIVE RATES</span><h3>Transparent project estimate</h3></div><button className="icon-button no-print" aria-label="Print quotation" onClick={() => window.print()}><Printer size={18} /></button></div>{!report.costing.valid && <div className="inline-warning"><CircleAlert size={16} /> Invalid specification: these costs are indicative only.</div>}<div className="table-scroll"><table><thead><tr><th>Cost component</th><th>Quantity</th><th>Rate (AED)</th><th>Cost (AED)</th></tr></thead><tbody>{report.costing.lines.map(line => <tr key={line.description}><td>{line.description}</td><td>{line.quantity} {line.unit}</td><td>{money(line.unit_cost)}</td><td>{money(line.cost)}</td></tr>)}</tbody></table></div><div className="quote-totals"><div><span>Direct cost</span><strong>AED {money(report.costing.direct_cost)}</strong></div><div><span>Sales subtotal · 30% gross margin</span><strong>AED {money(report.costing.subtotal)}</strong></div><div><span>VAT · 5%</span><strong>AED {money(report.costing.vat)}</strong></div><div className="total"><span>Estimated total</span><strong><small>AED</small> {money(report.costing.total)}</strong></div></div><p className="fine-print">{report.costing.note} Gross margin formula: selling price = direct cost ÷ 0.70.</p></section><section className="card scope-card"><h3>Scope & exclusions</h3><p className="muted">Includes selected fabric, standard hardware, manufacturing and installation labour.</p><div className="subheading">EXCLUDED FROM THIS ESTIMATE</div><ul className="simple-list">{report.costing.exclusions.map(item => <li key={item}>{item}</li>)}</ul><div className="info-note"><ShieldCheck size={20} /><p>No quote is sent to a customer. All amounts require commercial review.</p></div></section></div>}
           {tab === 'delivery' && <div className="report-grid"><div><section className="card timeline-card"><div className="section-heading"><h3>Proposed production plan</h3><span className={`pill ${report.production.on_time ? 'green' : 'amber'}`}>{report.production.on_time ? 'Within deadline' : 'Deadline at risk'}</span></div>{[

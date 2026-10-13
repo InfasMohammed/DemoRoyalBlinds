@@ -11,12 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .catalog import FABRICS, PRODUCTS, today
-from .models import ApprovalRequest, ProjectRequest
+from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery
+from .knowledge import answer_question, portfolio
 from .store import ReportStore, StorageUnavailable
 from .workflow import llm_enabled, run_workflow
 
 if os.getenv('DATA_MODE', 'demo') != 'demo':
     raise RuntimeError('Only DATA_MODE=demo is supported. Connect verified business data in a separate production implementation.')
+if os.getenv('KNOWLEDGE_RETRIEVAL_MODE', 'local') not in ('local', 'supabase_vector'):
+    raise RuntimeError('KNOWLEDGE_RETRIEVAL_MODE must be local or supabase_vector.')
 
 app = FastAPI(title='Royal Blinds · Operations Studio', version='0.1.0',
               description='Interview demonstration. Synthetic data. Human-reviewed estimates.')
@@ -40,6 +43,19 @@ def health():
 @app.get('/api/catalog')
 def catalog():
     return {'fabrics': FABRICS, 'products': PRODUCTS, 'data_mode': 'synthetic_demo'}
+
+
+@app.get('/api/knowledge/portfolio')
+def product_portfolio():
+    return portfolio()
+
+
+@app.post('/api/knowledge/ask')
+def knowledge_answer(request: KnowledgeQuery):
+    try:
+        return answer_question(request.question, request.category, request.product_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @app.post('/api/projects/analyze', status_code=201)
