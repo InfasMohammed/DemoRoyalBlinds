@@ -119,8 +119,11 @@ export default function App() {
   return <div className="app-shell">
     <aside className="sidebar no-print">
       <a className="brand" href="#" onClick={event => { event.preventDefault(); setPage('workspace') }} aria-label="Royal Blinds home">
-        <span className="brand-mark"><span /><span /><span /><span /></span>
-        <span>ROYAL BLINDS<small>OPERATIONS STUDIO</small></span>
+        <picture className="brand-picture">
+          <source media="(max-width: 980px)" srcSet="/brand/royal-blinds-icon.png" />
+          <img className="brand-logo" src="/brand/royal-blinds-logo.png" alt="Royal Blinds" width="749" height="290" />
+        </picture>
+        <span className="brand-caption">OPERATIONS STUDIO</span>
       </a>
       <div className="workspace-label">WORKSPACE <span>DEMO</span></div>
       <nav aria-label="Main navigation">
@@ -132,11 +135,11 @@ export default function App() {
       </nav>
       <div className="sidebar-callout"><Sparkles size={21} /><h4>Built for better decisions.</h4>
         <p>Six specialists. One clear plan. A human stays in control.</p><button onClick={() => setPage('workflow')}>Explore the workflow <ArrowUpRight size={15} /></button></div>
-      <div className="sidebar-bottom"><span className="avatar">RB</span><div>Interview demonstration<small>Synthetic factory data</small></div></div>
+      <div className="sidebar-bottom"><span className="avatar"><img src="/brand/royal-blinds-icon.png" alt="" width="22" height="22" /></span><div>Interview demonstration<small>Synthetic factory data</small></div></div>
     </aside>
     <div className="main-shell">
       <header className="topbar no-print"><div className="breadcrumb">Operations <ChevronRight size={14} /><strong>{({ workspace: 'Project studio', knowledge: 'Product knowledge', projects: 'Project reports', inventory: 'Material library', workflow: 'Agent workflow' } as Record<string, string>)[page]}</strong></div>
-        <div className="topbar-right"><span className={`connection ${health ? '' : 'offline'}`}><i />{health ? 'Backend connected' : 'Connecting'}</span><span className="topbar-divider" /><span className="location">Dubai, UAE</span><span className="small-avatar">RB</span></div>
+        <div className="topbar-right"><span className={`connection ${health ? '' : 'offline'}`}><i />{health ? 'Backend connected' : 'Connecting'}</span><span className="topbar-divider" /><span className="location">Dubai, UAE</span><span className="small-avatar"><img src="/brand/royal-blinds-icon.png" alt="" width="23" height="23" /></span></div>
       </header>
       <main>
         {error && <div role="alert" className="error-banner no-print"><CircleAlert size={18} /><span>{error}</span><button onClick={() => void load()}>Retry connection</button><button aria-label="Dismiss error" onClick={() => setError('')}><X size={16} /></button></div>}
