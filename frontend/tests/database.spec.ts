@@ -31,7 +31,7 @@ test('report displays returned waste margin and VAT percentages', async ({ page 
   await page.goto('/')
   await page.getByRole('button', { name: /The clear-to-review order/ }).click()
   await page.getByRole('button', { name: 'Analyze project' }).click()
-  await expect(page.getByText('12% waste allowance included · No stock reserved')).toBeVisible()
+  await expect(page.getByText('12% waste allowance included · Snapshot at analysis')).toBeVisible()
   await page.getByRole('tab', { name: 'Quotation', exact: true }).click()
   await expect(page.getByText('Sales subtotal · 25% gross margin')).toBeVisible()
   await expect(page.getByText('VAT · 10%', { exact: true })).toBeVisible()

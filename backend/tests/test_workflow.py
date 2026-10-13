@@ -100,13 +100,13 @@ def test_complete_api_review_flow():
     assert client.get('/api/projects').json()[0]['id'] == report_id
     assert client.get(f'/api/projects/{report_id}').json()['status'] == 'awaiting_review'
     approval = {'reviewer': 'Demo reviewer', 'measurements_confirmed': True,
-                'specification_confirmed': True, 'commercial_terms_confirmed': True}
+                'specification_confirmed': True, 'commercial_terms_confirmed': True, 'execution_confirmed': True}
     assert client.post(f'/api/projects/{report_id}/approve', json={**approval, 'measurements_confirmed': False}).status_code == 422
     response = client.post(f'/api/projects/{report_id}/approve', json=approval)
     assert response.status_code == 200
     assert response.json()['status'] == 'demo_approved'
     assert client.get(f'/api/projects/{report_id}').json()['approval']['reviewer'] == 'Demo reviewer'
-    assert client.post(f'/api/projects/{report_id}/approve', json=approval).status_code == 409
+    assert client.post(f'/api/projects/{report_id}/approve', json=approval).status_code == 200
     assert client.get('/api/projects/not-found').status_code == 404
 
 
@@ -115,7 +115,7 @@ def test_cannot_approve_blocked_report():
     report = client.post('/api/projects/analyze', json=project().model_dump(mode='json')).json()
     response = client.post(f"/api/projects/{report['id']}/approve", json={
         'reviewer': 'Demo reviewer', 'measurements_confirmed': True,
-        'specification_confirmed': True, 'commercial_terms_confirmed': True})
+        'specification_confirmed': True, 'commercial_terms_confirmed': True, 'execution_confirmed': True})
     assert response.status_code == 409
     assert main.store.get(report['id'])['status'] == 'blocked'
 

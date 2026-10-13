@@ -5,7 +5,17 @@ export type ProjectInput = {
   quantity: number; width_m: number; height_m: number; due_date: string; site: string;
 }
 export type Fabric = { id: ProjectInput['fabric_id']; name: string; sku: string; roll_width_m: number;
-  stock_lm: number; cost_per_lm: number; lead_days: number; transmission: string; color: string; compatible: string[]; source: string }
+  stock_lm: number; on_hand_lm?: number; reserved_lm?: number; cost_per_lm: number; lead_days: number; transmission: string; color: string; compatible: string[]; source: string }
+export type WorkAction = 'start_production' | 'finish_production' | 'pass_quality' | 'fail_quality' | 'complete_installation' | 'cancel'
+export type Execution = {
+  status: 'queued' | 'blocked' | 'completed' | 'cancelled'; reason: string | null; updated_at: string;
+  work_order: { id: string; status: 'planned' | 'in_production' | 'awaiting_quality' | 'ready_for_installation' | 'completed' | 'cancelled'; production_plan: Report['production'] } | null;
+  reservation: { material_id: string; quantity_lm: number; status: 'active' | 'consumed' | 'released' } | null;
+  tasks: { id: string; stage: string; description: string; status: string }[];
+  bookings: { stage: string; work_date: string; hours: number; released: boolean }[];
+  events: { id: number; event_type: string; actor: string; detail: string; created_at: string }[];
+  agent_findings: { agent: string; summary: string; mode: string }[];
+}
 export type Trace = { agent: string; role: string; summary: string; recommendation: string; sources: string[];
   facts: Record<string, unknown>; mode: string; duration_ms: number; fallback_reason?: string;
   citations?: { id: string; title: string; heading: string; source_url: string; content: string }[] }
@@ -26,6 +36,7 @@ export type Report = {
   decision: { status: string; blockers: string[]; actions: string[]; headline: string; execution: string };
   traces: Trace[];
   approval?: { reviewer: string; approved_at: string; scope: string };
+  execution?: Execution;
 }
 export type Health = { status: string; storage_mode: string; reasoning_mode: string; today: string; business_data_source?: string }
 export type Catalog = {

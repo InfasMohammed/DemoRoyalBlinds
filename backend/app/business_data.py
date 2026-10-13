@@ -50,12 +50,20 @@ class Material(Record):
     sku: str
     roll_width_m: Positive
     stock_lm: Number
+    on_hand_lm: Number | None = None
+    reserved_lm: Number = 0
     cost_per_lm: Number
     lead_days: int = Field(ge=0, le=3650)
     transmission: str
     color: str
     compatible: list[Identifier] = Field(min_length=1)
     source: str
+
+    @model_validator(mode='after')
+    def availability_fields(self):
+        if self.on_hand_lm is None:
+            self.on_hand_lm = self.stock_lm + self.reserved_lm
+        return self
 
 
 class Product(Record):
@@ -138,7 +146,26 @@ class Operations(Record):
 
 def load_operations():
     source = data_source()
-    raw = database_snapshot('get_operations_snapshot') if source == 'supabase' else json.loads((DATA_DIR / 'demo_operations.json').read_text())
+    if source == 'supabase':
+        raw = database_snapshot('get_operations_snapshot')
+    else:
+        from .store import LOCAL_LOCK, local_store_path
+        with LOCAL_LOCK:
+            raw = json.loads((DATA_DIR / 'demo_operations.json').read_text())
+            path = local_store_path()
+            reports = json.loads(path.read_text()) if path.exists() else {}
+            for fabric in raw['fabrics']:
+                consumed = reserved = 0
+                for report in reports.values():
+                    reservation = (report.get('execution') or {}).get('reservation')
+                    if reservation and reservation['material_id'] == fabric['id']:
+                        if reservation['status'] == 'active':
+                            reserved += reservation['quantity_lm']
+                        elif reservation['status'] == 'consumed':
+                            consumed += reservation['quantity_lm']
+                fabric['on_hand_lm'] = round(max(0, fabric['stock_lm'] - consumed), 2)
+                fabric['reserved_lm'] = round(reserved, 2)
+                fabric['stock_lm'] = round(max(0, fabric['on_hand_lm'] - reserved), 2)
     try:
         result = Operations.model_validate(raw).model_dump(mode='json')
     except Exception as exc:

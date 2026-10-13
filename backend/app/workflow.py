@@ -185,15 +185,10 @@ def add_business_days(day, days, weekdays=(0, 1, 2, 3, 4), holidays=()):
     return result
 
 
-def production_agent(state: State):
-    started = perf_counter()
-    business = state['business']
-    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
-    req = state['request']
-    product = products[req['product']]
-    now = today()
+def calculate_production(req, product, policy, lead_days=0, as_of=None):
+    now = as_of or today()
     calendar = (policy['working_weekdays'], policy['holidays'])
-    available = business_day_on_or_after(now + timedelta(days=state['materials']['lead_days']), *calendar)
+    available = business_day_on_or_after(now + timedelta(days=lead_days), *calendar)
     start = add_business_days(available, policy['queue_business_days'], *calendar)
     factory_hours = round(req['quantity'] * product['labor_hours'], 2)
     installation_hours = round(req['quantity'] * product['install_hours'], 2)
@@ -213,6 +208,18 @@ def production_agent(state: State):
                               f"Factory capacity {policy['factory_hours_day']:g} hours/day; installation capacity {policy['installation_hours_day']:g} hours/day.",
                               f"Queue: {policy['queue_business_days']} business days; inspection: {policy['quality_business_days']} business days; installation follows inspection.",
                               'Supplier lead time is in calendar days; dates are estimates, not production bookings.']}
+    return result
+
+
+def production_agent(state: State):
+    started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
+    req = state['request']
+    product = products[req['product']]
+    result = calculate_production(req, product, policy, state['materials']['lead_days'])
+    end = date.fromisoformat(result['completion_date'])
+    due = date.fromisoformat(result['due_date'])
     return {'production': result, 'traces': [trace('Production agent', 'Estimate sequencing, capacity and delivery risk',
         f"Estimated completion {end.isoformat()}; " + ('within the requested deadline.' if end <= due else f'{(end - due).days} calendar days beyond the deadline.'),
         result, started, [policy['source'], state['materials']['fabric']['source']])]}
@@ -234,7 +241,7 @@ def coordinator_agent(state: State):
                 'Confirm sample, scope, exclusions and commercial terms with a human reviewer.']
     result = {'status': 'blocked' if blockers else 'awaiting_review', 'blockers': blockers,
               'actions': actions, 'headline': 'Resolve constraints before approval' if blockers else 'Estimate ready for human review',
-              'human_approval_required': True, 'execution': 'No purchasing, inventory reservation, factory dispatch or customer communication.'}
+              'human_approval_required': True, 'execution': 'Analysis makes no resource changes. Human approval authorizes demo reservation and a work order; no external purchasing, machine commands or messaging.'}
     return {'decision': result, 'traces': [trace('Coordinator', 'Combine specialist findings and enforce approval gates',
         result['headline'], result, started, ['Specialist findings', 'Demo approval policy · APR-001'])]}
 

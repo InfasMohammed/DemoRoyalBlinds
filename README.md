@@ -119,7 +119,7 @@ py -3.12 -m uv run --locked --project backend python backend/scripts/check_datab
 | `company_knowledge_settings` | Category descriptions, source provenance and evidence limitations |
 | `demo_reports` | Complete project reports, agent evidence, business snapshots and review records |
 
-Each analysis reads one operational SQL snapshot plus one knowledge SQL snapshot and shares them across all six agents. No process-wide catalog cache is used. Stock, prices or settings changed after analysis apply to the next analysis; historical reports retain their captured values. Operational and knowledge snapshots are separate reads. Analysis/approval does not reserve or deduct stock, place purchase orders, book capacity or dispatch work. Report approval is a recorded review, not a transactional stock guarantee.
+Each analysis reads one operational SQL snapshot plus one knowledge SQL snapshot and shares them across all six agents. No process-wide catalog cache is used. Stock, prices or settings changed after analysis apply to the next analysis; historical reports retain their captured values. Operational and knowledge snapshots are separate reads. Analysis makes no resource changes. A new human approval with execution authorization starts the post-approval workflow described below: atomic material reservation, capacity booking and work-order creation. Manufacturing completion consumes reserved sample material. No purchase orders, machine commands or external messages are sent.
 
 `BUSINESS_DATA_SOURCE=auto` selects Supabase when both backend variables are set and otherwise selects offline demo fixtures. `supabase` requires database configuration and fails explicitly if it cannot read valid records. `demo` explicitly uses bundled fixtures in `backend/app/data` for offline testing. Database failures never silently fall back to sample stock or local knowledge. Optional vector-search failure can fall back to keyword search over the **same current database corpus**. Keyword retrieval from Supabase needs no embedding key and still supports NVIDIA-generated RAG answers.
 
@@ -164,7 +164,7 @@ This is a constrained specialist workflow, rather than an autonomous open-ended 
 3. Inspect the **Agent findings** and expand inventory evidence. Explain the record IDs, formulas and difference between rules and live AI.
 4. Click **Use & re-analyze** for performance blackout. The new report uses 120 lm demo stock and recomputes the price and plan. With the default flexible deadline it becomes eligible for human review.
 5. Open **Quotation**: direct cost **AED 13,602.85**, selling subtotal **AED 19,432.64**, VAT **AED 971.63**, total **AED 20,404.27**. Gross margin is `cost ÷ (1 − 0.30)`, not a 30% markup.
-6. Review **Production & quality**, then approve the demo estimate with all three confirmations. It records the reviewer without executing a business action.
+6. Review **Production & quality**, then approve the demo estimate with the three review confirmations plus explicit demo execution authorization. The Work order tab shows the reservation, booked dates, tasks and activity log. Continue through production, quality and installation using the progress controls.
 7. Start **The urgent fit-out**. The five-day deadline fails even if you select an available fabric. Show how the coordinator prevents an unrealistic promise.
 
 Dates are calculated using the current Dubai date, so calendar results vary with the demo day. Monday–Friday working days, a two-day queue, six productive hours/day, and supplier lead times are explicit assumptions. Public holidays and live bookings are not included.
@@ -184,7 +184,7 @@ npm run build
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
 ```
 
-On another machine, install Playwright's Chromium with `npx playwright install chromium` and omit `CHROMIUM_PATH`. Browser tests start both services if they are not already running. They create synthetic demo reports. Use a separate backend environment/store when testing against Supabase.
+On another machine, install Playwright's Chromium with `npx playwright install chromium` and omit `CHROMIUM_PATH`. Browser tests start an isolated offline backend on 8010 and frontend on 5180, with a unique local report file for each run. Supabase/LLM environment values are overridden with blanks for those test services. No running app or Supabase inventory is used by browser approval tests.
 
 ## API
 
@@ -195,15 +195,17 @@ On another machine, install Playwright's Chromium with `npx playwright install c
 | POST | `/api/projects/analyze` | Run the graph and persist the resulting report |
 | GET | `/api/projects` | Latest 50 reports |
 | GET | `/api/projects/{id}` | One report and its evidence |
-| POST | `/api/projects/{id}/approve` | Require three confirmations, reject blockers and duplicate approval |
+| POST | `/api/projects/{id}/approve` | Require review/execution consent, atomically queue actions, safely return an existing approval on retry |
+| POST | `/api/projects/{id}/execute` | Retry a queued or blocked post-approval job without duplicating effects |
+| POST | `/api/projects/{id}/work-order/actions` | Record manufacturing, quality, installation or cancellation progress |
 
 ## Scope and next steps
 
 The current estimating workflow supports motorized rollers, manual rollers and manual-track curtains with one uniform opening size per project. Product discovery covers the supplied internal, external and smart portfolio. Tensile structures, retractable roofs, awnings and canopies require different engineering and costing models and are not supported by the estimating tools. Add mixed opening schedules, supplier-backed lead times and verified product ratings before expanding estimation scope.
 
-This version is for a private interview demo. FastAPI has no user authentication: reviewer names are attestations, not verified identities. Supabase RLS protects direct browser database access, but does not authenticate the API. Before public deployment, add Supabase Auth, backend JWT validation, role checks, per-user/organization report access, rate limiting and an immutable audit log. Local JSON storage supports one backend process only; use Supabase for multiple processes. Inventory reservations, supplier commitments and real production integrations are separate implementation work.
+This version is for a private interview demo. FastAPI has no user authentication: reviewer names are attestations, not verified identities. Supabase RLS protects direct browser database access, but does not authenticate the API. Before public deployment, add Supabase Auth, backend JWT validation, role checks, per-user/organization report access, rate limiting and an immutable audit log. Local JSON storage supports one backend process only; use Supabase for multiple processes. The reservation/booking workflow is bounded to sample data. Supplier commitments, verified operator roles and real factory integrations remain separate production work.
 
-Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Four integration checks run against a disposable PostgreSQL/pgvector database: complete migration/RLS, preservation on rerun, vector invalidation and agent reads after SQL edits. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
+Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Eleven integration checks run against a disposable PostgreSQL/pgvector database, including migration/RLS, preservation on rerun, vector invalidation, atomic approval, stock reservation races, capacity/deadline rollback, stale prices, cancellation and guarded production progress. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
 
 ## Product knowledge and RAG
 
@@ -253,3 +255,30 @@ On Windows, substitute `py -3.12 -m uv` for `uv` in the validation and knowledge
 Regular `uv run --locked pytest -q` uses explicit offline fixtures and mocked Supabase responses. The optional `tests/test_database_sql.py` runs only when `DATABASE_TEST_URL` points to an empty **disposable** PostgreSQL database with pgvector available and administrator permissions. It creates Supabase-like roles/schema and synthetic data. Never point it at rbdemo or a production database. Install `psycopg[binary]` in a separate test tooling environment to run it; this is not an application dependency. A skipped SQL integration module is not evidence of a successful live database test.
 
 Generate the full migration and standalone components after an authorized seed/schema change with `uv run --locked --project backend python backend/scripts/export_database_sql.py`. Review the generated SQL before applying it. Reruns intentionally preserve existing data; changing a seed file does not replace an existing database value.
+
+## After quotation approval
+
+For an existing rbdemo database, apply **[supabase/post_approval.sql](supabase/post_approval.sql)** once in the SQL editor, then restart the backend. This upgrade adds six tables and replaces the operational snapshot RPC to account for reservations. It preserves stock balances, settings and existing reports. For a new database, the current `database_setup.sql` includes this upgrade. Historical approved reports are not automatically executed; analyze and approve a fresh project.
+
+New approval requires the three review confirmations **and** “I authorize demo material reservation and work-order creation.” The API stores the approval and a unique queued job in one transaction. A second LangGraph workflow validates the approval, prepares inventory/production/quality/installation handoffs and calls one transactional execution tool. The tool rechecks current specifications, prices, policy, stock and bookings before creating any resources. Changes to quote terms require a fresh analysis/approval; an inventory or capacity shortfall blocks execution without partial reservations/orders. Report approval and execution status are separate: a quote can be accepted while execution needs attention.
+
+The database workflow is enabled only while `manufacturing_settings.is_sample=true`, matching the app's interview scope. Setting it false keeps read-only business analysis available but disables these demo execution/progress actions. Role authentication and operational integrations must be implemented before enabling actions on real company records. `DATA_MODE=demo` remains required.
+
+| New table | Responsibility |
+|---|---|
+| `approval_jobs` | Durable queue, status, blocker reason and agent handoffs; one job per report |
+| `work_orders` | Booked plan and progress state; one work order per report |
+| `material_reservations` | Active, consumed or released fabric allocation; one allocation per report |
+| `production_bookings` | Factory and installation hours by working date |
+| `work_order_tasks` | Manufacturing task, required quality checks and installation handover |
+| `project_events` | Approval, execution, quality, progress and cancellation audit entries |
+
+Approval reserves material without reducing physical on-hand stock. The Material library reports **available**, **on hand** and **reserved** quantities. In the SQL editor, `inventory_materials.stock_lm` is on-hand stock; `/api/catalog` exposes `stock_lm` as available stock after active reservations. Reservation and capacity locks prevent two simultaneous approvals from overselling the same material or overbooking daily hours.
+
+Progress is explicit: **Ready for production → In production → Awaiting quality checks → Ready for installation → Completed**. “Record manufacturing complete” consumes material exactly once. Quality approval requires every current checklist ID; failed quality holds installation until checks are repeated. Cancellation before production releases material and bookings. After manufacturing, cancellation releases unused installation bookings but retains consumed material and factory history. A started manufacturing order must finish/report consumption before cancellation; the system does not assume partially processed fabric can be returned.
+
+`POST_APPROVAL_WORKER_ENABLED=true` starts a lightweight worker with FastAPI. It polls queued approvals every ten seconds and recovers after a restart. Blocked jobs require explicit Retry execution after resolving the issue. Approval and effect commits are distinct transactions linked by the durable queue. The terminal effect transaction is atomic and idempotent; a lost response or competing workers cannot duplicate resources. This design uses durable database jobs and idempotent tools, not an in-memory pause or a LangGraph checkpoint backend.
+
+Demo journey: analyze four Performance-blackout rollers with a flexible deadline, approve with execution consent, inspect the Work order tab, start production, record manufacturing complete, confirm all quality checks, and record installation complete. Reopen the saved report to verify persistence. Test cancellation on a separate project before production. Resource reservations affect later analyses, so repeated large-order demonstrations may require cancellation/replenishment in the sample dataset.
+
+Notifications currently mean the in-app activity log only. No customer/supplier emails, purchasing, equipment control or automatic declarations of finished work are performed. Operators explicitly attest to progress; their names are not authenticated identities in this private prototype.

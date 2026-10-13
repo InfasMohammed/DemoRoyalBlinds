@@ -122,7 +122,8 @@ grant execute on function public.get_operations_snapshot() to service_role;
 grant execute on function public.get_company_knowledge_snapshot() to service_role;
 commit;
 """
-    return sql
+    execution = (ROOT / 'supabase/post_approval.sql').read_text().replace('begin;', '', 1).rsplit('commit;', 1)[0]
+    return sql.rsplit('commit;', 1)[0] + '\n' + execution + '\ncommit;\n'
 
 
 def combined_sql():

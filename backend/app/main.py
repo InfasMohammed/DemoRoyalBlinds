@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,19 +13,31 @@ from fastapi.responses import JSONResponse
 
 from .catalog import today
 from .business_data import BusinessDataUnavailable, load_operations, data_source
-from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery
+from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery, WorkOrderAction
 from .knowledge import answer_question, portfolio
 from .llm import chat_info
 from .store import ReportStore, StorageUnavailable
 from .workflow import llm_enabled, run_workflow
+from .execution import ApprovalWorker, run_post_approval
 
 if os.getenv('DATA_MODE', 'demo') != 'demo':
     raise RuntimeError('Only DATA_MODE=demo is supported. Connect verified business data in a separate production implementation.')
 if os.getenv('KNOWLEDGE_RETRIEVAL_MODE', 'local') not in ('local', 'supabase_vector'):
     raise RuntimeError('KNOWLEDGE_RETRIEVAL_MODE must be local or supabase_vector.')
 
-app = FastAPI(title='Royal Blinds · Operations Studio', version='0.1.0',
-              description='Interview demonstration. Synthetic data. Human-reviewed estimates.')
+@asynccontextmanager
+async def lifespan(app):
+    worker = ApprovalWorker(store)
+    enabled = os.getenv('POST_APPROVAL_WORKER_ENABLED', 'true').lower() == 'true'
+    if enabled:
+        worker.start()
+    yield
+    if enabled:
+        worker.stop()
+
+
+app = FastAPI(title='Royal Blinds · Operations Studio', version='0.2.0', lifespan=lifespan,
+              description='Interview demonstration. Human-reviewed estimates and demo work orders.')
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','),
                    allow_methods=['GET', 'POST'], allow_headers=['Content-Type'])
 store = ReportStore()
@@ -92,11 +105,36 @@ def project(report_id: str):
 
 @app.post('/api/projects/{report_id}/approve')
 def approve(report_id: str, request: ApprovalRequest):
-    if not all([request.measurements_confirmed, request.specification_confirmed, request.commercial_terms_confirmed]):
-        raise HTTPException(422, 'All three review confirmations are required.')
+    if not all([request.measurements_confirmed, request.specification_confirmed, request.commercial_terms_confirmed, request.execution_confirmed]):
+        raise HTTPException(422, 'All review confirmations and demo execution authorization are required.')
     try:
         report = store.approve(report_id, {**request.model_dump(), 'approved_at': datetime.now(timezone.utc).isoformat(),
-                                         'scope': 'Demo estimate approval only; no operational action.'})
+                                         'scope': 'Approve quotation, reserve demo material and create a demo work order.'})
+        if report:
+            report = run_post_approval(store, report_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if not report:
+        raise HTTPException(404, 'Project report not found.')
+    return report
+
+
+@app.post('/api/projects/{report_id}/execute')
+def retry_execution(report_id: str):
+    try:
+        report = run_post_approval(store, report_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if not report:
+        raise HTTPException(404, 'Project report not found.')
+    return report
+
+
+@app.post('/api/projects/{report_id}/work-order/actions')
+def work_order_action(report_id: str, request: WorkOrderAction):
+    try:
+        values = request.model_dump(mode='json')
+        report = store.advance(report_id, **values)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     if not report:

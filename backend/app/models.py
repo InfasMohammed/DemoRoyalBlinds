@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +23,14 @@ class ApprovalRequest(BaseModel):
     measurements_confirmed: bool
     specification_confirmed: bool
     commercial_terms_confirmed: bool
+    execution_confirmed: bool = False
+
+
+class WorkOrderAction(BaseModel):
+    action: Literal['start_production', 'finish_production', 'pass_quality', 'fail_quality', 'complete_installation', 'cancel']
+    actor: str = Field(min_length=2, max_length=100)
+    note: str = Field(default='', max_length=1000)
+    checked_ids: list[UUID] = Field(default_factory=list, max_length=100)
 
 
 class AgentNarrative(BaseModel):

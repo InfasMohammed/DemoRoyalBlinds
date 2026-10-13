@@ -7,6 +7,7 @@ os.environ['BUSINESS_DATA_SOURCE'] = 'demo'
 
 
 @pytest.fixture(autouse=True)
-def explicit_offline_business_data(monkeypatch):
+def explicit_offline_business_data(monkeypatch, tmp_path):
     # Tests opt in to database mode individually; never use a developer's key.
     monkeypatch.setenv('BUSINESS_DATA_SOURCE', 'demo')
+    monkeypatch.setenv('DEMO_STORE_PATH', str(tmp_path / 'reports.json'))
