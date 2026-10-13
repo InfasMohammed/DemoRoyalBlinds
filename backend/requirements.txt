@@ -2,7 +2,7 @@ fastapi==0.115.12
 uvicorn==0.34.2
 langgraph==0.4.8
 langchain-openai==0.3.19
-supabase==2.15.2
+supabase==2.32.0
 python-dotenv==1.1.0
 pytest==8.3.5
 httpx==0.28.1

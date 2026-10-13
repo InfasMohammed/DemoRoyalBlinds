@@ -144,6 +144,22 @@ def test_partial_supabase_configuration_fails_explicitly(monkeypatch):
         ReportStore()
 
 
+@pytest.mark.parametrize('key', ['sb_secret_not_a_real_key', 'proxy-placeholder-not-a-real-key'])
+def test_supabase_client_accepts_server_keys_and_proxy_bindings(monkeypatch, key):
+    """Regression: older SDKs rejected these formats before making a request."""
+    import httpx
+
+    def no_network(*args, **kwargs):
+        raise AssertionError('Client initialization must not make a network request')
+
+    monkeypatch.setattr(httpx.Client, 'send', no_network)
+    monkeypatch.setenv('SUPABASE_URL', 'https://example.supabase.co')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', key)
+    store = ReportStore()
+    assert store.mode == 'supabase'
+    assert store.client.table('demo_reports') is not None
+
+
 def test_local_storage_survives_store_recreation():
     report = workflow.run_workflow(project())
     first = ReportStore()
