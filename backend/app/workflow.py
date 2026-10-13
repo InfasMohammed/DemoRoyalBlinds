@@ -7,14 +7,17 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 
-from .catalog import FABRICS, POLICY, PRODUCTS, today
+from .catalog import today
+from .business_data import load_operations
 from .models import AgentNarrative, ProjectRequest
-from .knowledge import retrieve
+from .knowledge import retrieve, load_corpus
 from .llm import chat_enabled, structured_chat, failure_reason
 
 
 class State(TypedDict, total=False):
     request: dict
+    business: dict
+    knowledge_corpus: dict
     requirements: dict
     materials: dict
     quality: dict
@@ -55,11 +58,13 @@ def trace(agent: str, role: str, summary: str, evidence: dict, started: float, s
 
 def requirements_agent(state: State):
     started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
     req = state['request']
-    product = PRODUCTS[req['product']]
+    product = products[req['product']]
     area = round(req['quantity'] * req['width_m'] * req['height_m'], 2)
-    product_id = 'curtains' if req['product'] == 'curtain' else 'roller_blinds'
-    knowledge = retrieve(product['name'] + ' ' + req['brief'], 'internal', product_id)
+    product_id = product['knowledge_product_id']
+    knowledge = retrieve(product['name'] + ' ' + req['brief'], product_id=product_id, corpus=state['knowledge_corpus'])
     result = {'product_name': product['name'], 'area_sqm': area,
               'dimensions': f"{req['width_m']} × {req['height_m']} m", 'quantity': req['quantity'],
               'scope': 'Supply, manufacture and installation; site survey required.',
@@ -67,89 +72,85 @@ def requirements_agent(state: State):
               'knowledge': knowledge}
     return {'requirements': result, 'traces': [trace('Specification agent', 'Normalize the project brief',
         f"{req['quantity']} {product['name'].lower()} across {area} m². Dimensions are provisional until a site survey.",
-        result, started, ['Customer form · INPUT-001', 'Demo product catalog · CAT-001'] +
+        result, started, ['Customer form · INPUT-001', product['source'], business['data_source'] + ' catalog'] +
         [c['id'] for c in knowledge['citations']], knowledge['citations'])]}
 
 
 def inventory_agent(state: State):
     started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
     req = state['request']
-    fabric = next(f for f in FABRICS if f['id'] == req['fabric_id'])
-    if req['product'] == 'curtain':
+    fabric = next(f for f in fabrics if f['id'] == req['fabric_id'])
+    product = products[req['product']]
+    if product['estimation_kind'] == 'curtain':
         # Vertical drops: 2x fullness, width per unit rounded up to whole rolls.
-        drops_per_unit = math.ceil(req['width_m'] * 2 / fabric['roll_width_m'])
-        cut_length = round(req['height_m'] + 0.30, 3)
+        drops_per_unit = math.ceil(req['width_m'] * product['fullness'] / fabric['roll_width_m'])
+        cut_length = round(req['height_m'] + product['length_allowance_m'], 3)
         base_lm = req['quantity'] * drops_per_unit * cut_length
-        layout = f"{drops_per_unit} vertical drops per opening, 2× fullness, 30 cm hem allowance"
+        layout = f"{drops_per_unit} vertical drops per opening, {product['fullness']:g}× fullness, {product['length_allowance_m'] * 100:g} cm hem allowance"
         fits = True
     else:
-        cut_width = round(req['width_m'] + 0.10, 3)
-        cut_length = round(req['height_m'] + 0.25, 3)
+        cut_width = round(req['width_m'] + product['width_allowance_m'], 3)
+        cut_length = round(req['height_m'] + product['length_allowance_m'], 3)
         panels_per_row = math.floor(fabric['roll_width_m'] / cut_width)
         fits = panels_per_row >= 1
         base_lm = math.ceil(req['quantity'] / max(1, panels_per_row)) * cut_length
-        layout = f'{panels_per_row} panels per roll row, 10 cm width + 25 cm length allowance'
-    required_lm = round(base_lm * (1 + POLICY['waste_fraction']), 2)
+        layout = f"{panels_per_row} panels per roll row, {product['width_allowance_m'] * 100:g} cm width + {product['length_allowance_m'] * 100:g} cm length allowance"
+    required_lm = round(base_lm * (1 + policy['waste_fraction']), 2)
     shortage = round(max(0, required_lm - fabric['stock_lm']), 2)
     alternatives = [{'id': f['id'], 'name': f['name'], 'stock_lm': f['stock_lm'],
                      'reason': 'Same light-control category; confirm colour, specification and revised price.'}
-                    for f in FABRICS if f['id'] != fabric['id'] and req['product'] in f['compatible']
+                    for f in fabrics if f['id'] != fabric['id'] and req['product'] in f['compatible']
                     and f['transmission'] == fabric['transmission'] and f['stock_lm'] >= required_lm
                     and f['roll_width_m'] >= fabric['roll_width_m']]
     result = {'fabric': fabric, 'required_lm': required_lm, 'shortage_lm': shortage,
               'in_stock': shortage == 0, 'fits_roll': fits, 'layout': layout,
-              'waste_percent': 8, 'lead_days': fabric['lead_days'] if shortage else 0,
+              'waste_percent': round(policy['waste_fraction'] * 100, 4), 'lead_days': fabric['lead_days'] if shortage else 0,
               'alternatives': alternatives, 'stock_reserved': False}
     summary = f"{required_lm} linear metres required; {fabric['stock_lm']} available. " + (
-        f"Shortfall of {shortage} m requires purchasing or a reviewed substitution." if shortage else 'Demo stock covers this project; nothing has been reserved.')
+        f"Shortfall of {shortage} m requires purchasing or a reviewed substitution." if shortage else 'Recorded stock covers this project; nothing has been reserved.')
     return {'materials': result, 'traces': [trace('Inventory agent', 'Calculate fabric yield and check availability',
-        summary, result, started, [fabric['source'], POLICY['source']])]}
+        summary, result, started, [fabric['source'], policy['source']])]}
 
 
 def quality_agent(state: State):
     started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
     req = state['request']
-    product = PRODUCTS[req['product']]
-    fabric = next(f for f in FABRICS if f['id'] == req['fabric_id'])
+    product = products[req['product']]
+    fabric = next(f for f in fabrics if f['id'] == req['fabric_id'])
     blockers = []
     if req['width_m'] > product['max_width_m'] or req['height_m'] > product['max_height_m']:
-        blockers.append('Dimensions exceed this demo product rating; split the opening or obtain an engineered specification.')
+        blockers.append('Dimensions exceed the configured product limit; split the opening or obtain an engineered specification.')
     if req['product'] not in fabric['compatible']:
         blockers.append('Selected fabric is incompatible with this product; select a supported fabric.')
-    if req['product'] != 'curtain' and req['width_m'] + 0.10 > fabric['roll_width_m']:
+    if product['estimation_kind'] != 'curtain' and req['width_m'] + product['width_allowance_m'] > fabric['roll_width_m']:
         blockers.append('Panel plus allowance exceeds roll width; revise the design or select a wider fabric.')
-    checklist = ['Confirm each opening by site survey; record tolerances.',
-                 'Approve a physical fabric sample and light-control specification.',
-                 'Inspect fabric for defects before cutting and record batch traceability.',
-                 'Check finished dimensions, alignment and smooth operation.',
-                 'Check fixing substrate, access conditions and installer safety plan.']
-    if req['product'] == 'motorized_roller':
-        checklist += ['Qualified installer to verify power, motor load and wiring.',
-                      'Test limit settings, remote pairing and safe operation.']
-    elif req['product'] == 'manual_roller':
-        checklist += ['Confirm applicable cord/chain safety requirements and fit approved restraints.']
-    knowledge = retrieve('motorized roller blinds remote smartphone rechargeable battery mains' if req['product'] == 'motorized_roller'
-                         else product['name'] + ' product range',
-                         'smart' if req['product'] == 'motorized_roller' else 'internal',
-                         'curtains' if req['product'] == 'curtain' else 'roller_blinds')
+    checklist = business['checklists'][req['product']]
+    knowledge = retrieve(product['name'] + ' power operation installation',
+                         product_id=product['knowledge_product_id'], corpus=state['knowledge_corpus'])
     result = {'blockers': blockers, 'checklist': checklist, 'knowledge': knowledge,
               'evidence_limit': 'Website copy describes products and automation options; approved model datasheets, wiring and installation instructions are still required.',
               'certification_verified': False, 'note': 'Checklist is a demo aid; it does not certify compliance.'}
     summary = f'{len(blockers)} specification blockers; {len(checklist)} inspection and installation checks. Site verification remains mandatory.'
     return {'quality': result, 'traces': [trace('Quality & installation agent', 'Check product limits and site risks',
-        summary, result, started, ['Demo product limits · ENG-001', 'Demo inspection checklist · QA-001'] +
+        summary, result, started, [product['source'], business['data_source'] + ' inspection checklist'] +
         [c['id'] for c in knowledge['citations']], knowledge['citations'])]}
 
 
 def costing_agent(state: State):
     started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
     req, mat = state['request'], state['materials']
-    product = PRODUCTS[req['product']]
+    product = products[req['product']]
     lines = [
         {'description': f"{mat['fabric']['name']} fabric", 'quantity': mat['required_lm'], 'unit': 'lm', 'unit_cost': mat['fabric']['cost_per_lm']},
         {'description': 'Hardware / track assemblies', 'quantity': req['quantity'], 'unit': 'units', 'unit_cost': product['hardware_aed']},
-        {'description': 'Manufacturing labour', 'quantity': round(req['quantity'] * product['labor_hours'], 2), 'unit': 'hours', 'unit_cost': POLICY['labor_aed_hour']},
-        {'description': 'Installation labour', 'quantity': round(req['quantity'] * product['install_hours'], 2), 'unit': 'hours', 'unit_cost': POLICY['installation_aed_hour']},
+        {'description': 'Manufacturing labour', 'quantity': round(req['quantity'] * product['labor_hours'], 2), 'unit': 'hours', 'unit_cost': policy['labor_aed_hour']},
+        {'description': 'Installation labour', 'quantity': round(req['quantity'] * product['install_hours'], 2), 'unit': 'hours', 'unit_cost': policy['installation_aed_hour']},
     ]
     if product['motor_aed']:
         lines.insert(2, {'description': 'Motor & remote sets', 'quantity': req['quantity'], 'unit': 'sets', 'unit_cost': product['motor_aed']})
@@ -157,62 +158,64 @@ def costing_agent(state: State):
         line['cost'] = round(line['quantity'] * line['unit_cost'], 2)
     cost = round(sum(line['cost'] for line in lines), 2)
     # Gross margin, not markup: sell price = cost / (1 - margin).
-    subtotal = round(cost / (1 - POLICY['margin_fraction']), 2)
-    vat = round(subtotal * POLICY['vat_fraction'], 2)
-    result = {'currency': 'AED', 'lines': lines, 'direct_cost': cost, 'subtotal': subtotal,
-              'vat': vat, 'total': round(subtotal + vat, 2), 'gross_margin_percent': 30,
-              'vat_percent': 5, 'per_unit_incl_vat': round((subtotal + vat) / req['quantity'], 2),
+    subtotal = round(cost / (1 - policy['margin_fraction']), 2)
+    vat = round(subtotal * policy['vat_fraction'], 2)
+    result = {'currency': policy['currency'], 'lines': lines, 'direct_cost': cost, 'subtotal': subtotal,
+              'vat': vat, 'total': round(subtotal + vat, 2), 'gross_margin_percent': round(policy['margin_fraction'] * 100, 4),
+              'vat_percent': round(policy['vat_fraction'] * 100, 4), 'per_unit_incl_vat': round((subtotal + vat) / req['quantity'], 2),
               'valid': not state['quality']['blockers'],
-              'exclusions': ['Electrical work and power supply', 'Scaffolding / special access',
-                             'Structural alterations', 'Delivery charges and nonstandard hardware'],
-              'note': 'Illustrative estimate using demo rates, subject to survey and commercial review.'}
+              'exclusions': policy['quote_exclusions'],
+              'note': 'Estimate uses captured business records, subject to survey and commercial review.'}
     return {'costing': result, 'traces': [trace('Quotation agent', 'Calculate a transparent estimate in AED',
-        f"Illustrative total AED {result['total']:,.2f}, including 5% VAT. Pricing uses a 30% gross-margin assumption.",
-        result, started, [POLICY['source'], 'Demo component rates · PRICE-001'])]}
+        f"Estimated total {result['currency']} {result['total']:,.2f}, including {result['vat_percent']:g}% VAT. Pricing uses {result['gross_margin_percent']:g}% gross margin.",
+        result, started, [policy['source'], product['source'], business['data_source'] + ' material rates'])]}
 
 
-def business_day_on_or_after(day):
-    while day.weekday() >= 5:
+def business_day_on_or_after(day, weekdays=(0, 1, 2, 3, 4), holidays=()):
+    while day.weekday() not in weekdays or day.isoformat() in holidays:
         day += timedelta(days=1)
     return day
 
 
-def add_business_days(day, days):
-    result = business_day_on_or_after(day)
+def add_business_days(day, days, weekdays=(0, 1, 2, 3, 4), holidays=()):
+    result = business_day_on_or_after(day, weekdays, holidays)
     for _ in range(days):
         result += timedelta(days=1)
-        result = business_day_on_or_after(result)
+        result = business_day_on_or_after(result, weekdays, holidays)
     return result
 
 
 def production_agent(state: State):
     started = perf_counter()
+    business = state['business']
+    products, fabrics, policy = business['products'], business['fabrics'], business['policy']
     req = state['request']
-    product = PRODUCTS[req['product']]
+    product = products[req['product']]
     now = today()
-    available = business_day_on_or_after(now + timedelta(days=state['materials']['lead_days']))
-    start = add_business_days(available, POLICY['queue_business_days'])
+    calendar = (policy['working_weekdays'], policy['holidays'])
+    available = business_day_on_or_after(now + timedelta(days=state['materials']['lead_days']), *calendar)
+    start = add_business_days(available, policy['queue_business_days'], *calendar)
     factory_hours = round(req['quantity'] * product['labor_hours'], 2)
     installation_hours = round(req['quantity'] * product['install_hours'], 2)
-    factory_days = max(1, math.ceil(factory_hours / POLICY['factory_hours_day']))
-    install_days = max(1, math.ceil(installation_hours / POLICY['installation_hours_day']))
-    factory_end = add_business_days(start, factory_days - 1)
-    quality_day = add_business_days(factory_end, 1)
-    install_start = add_business_days(quality_day, 1)
-    end = add_business_days(install_start, install_days - 1)
+    factory_days = max(1, math.ceil(factory_hours / policy['factory_hours_day']))
+    install_days = max(1, math.ceil(installation_hours / policy['installation_hours_day']))
+    factory_end = add_business_days(start, factory_days - 1, *calendar)
+    quality_day = add_business_days(factory_end, policy['quality_business_days'], *calendar)
+    install_start = add_business_days(quality_day, 1, *calendar)
+    end = add_business_days(install_start, install_days - 1, *calendar)
     due = date.fromisoformat(req['due_date'])
     result = {'as_of': now.isoformat(), 'material_ready': available.isoformat(),
               'manufacture_start': start.isoformat(), 'manufacture_end': factory_end.isoformat(),
               'quality_date': quality_day.isoformat(), 'installation_start': install_start.isoformat(),
               'completion_date': end.isoformat(), 'due_date': due.isoformat(), 'on_time': end <= due,
               'slack_days': (due - end).days, 'factory_hours': factory_hours, 'installation_hours': installation_hours,
-              'assumptions': ['Monday–Friday working calendar; public holidays excluded.',
-                              '6 productive hours per day for one factory cell and one installation team.',
-                              '2 business days existing queue; 1 inspection day; installation follows inspection.',
-                              'Material supplier lead time is in calendar days; availability is unconfirmed.']}
+              'assumptions': [f"Working weekdays (Monday=0): {policy['working_weekdays']}; configured holidays: {policy['holidays']}.",
+                              f"Factory capacity {policy['factory_hours_day']:g} hours/day; installation capacity {policy['installation_hours_day']:g} hours/day.",
+                              f"Queue: {policy['queue_business_days']} business days; inspection: {policy['quality_business_days']} business days; installation follows inspection.",
+                              'Supplier lead time is in calendar days; dates are estimates, not production bookings.']}
     return {'production': result, 'traces': [trace('Production agent', 'Estimate sequencing, capacity and delivery risk',
         f"Estimated completion {end.isoformat()}; " + ('within the requested deadline.' if end <= due else f'{(end - due).days} calendar days beyond the deadline.'),
-        result, started, ['Demo capacity plan · CAP-001', 'Demo supplier lead times · SUP-001'])]}
+        result, started, [policy['source'], state['materials']['fabric']['source']])]}
 
 
 def coordinator_agent(state: State):
@@ -257,9 +260,23 @@ GRAPH = build_graph()
 
 def run_workflow(request: ProjectRequest):
     started = perf_counter()
-    state = GRAPH.invoke({'request': request.model_dump(mode='json'), 'traces': []})
+    business = load_operations()
+    if request.product not in business['products']:
+        raise ValueError('Selected product is not in the current manufacturing catalog.')
+    if request.fabric_id not in {f['id'] for f in business['fabrics']}:
+        raise ValueError('Selected material is not in the current inventory catalog.')
+    corpus = load_corpus()
+    if business['products'][request.product]['knowledge_product_id'] not in {p['id'] for p in corpus['products']}:
+        raise ValueError('Manufacturing product references an unknown knowledge product.')
+    state = GRAPH.invoke({'request': request.model_dump(mode='json'), 'traces': [],
+                          'business': business, 'knowledge_corpus': corpus})
+    state.pop('business', None)
+    state.pop('knowledge_corpus', None)
+    for finding in state['traces']:
+        finding.update(data_source=business['data_source'], data_fetched_at=business['fetched_at'])
     modes = {t['mode'] for t in state['traces']}
     mode = 'live_ai' if modes == {'llm'} else 'ai_with_fallback' if llm_enabled() else 'rule_based_demo'
     return {'id': str(uuid4()), 'created_at': datetime.now(timezone.utc).isoformat(),
-            'status': state['decision']['status'], 'data_mode': 'synthetic_demo', 'reasoning_mode': mode,
+            'status': state['decision']['status'], 'data_mode': 'synthetic_demo' if business['is_sample'] else 'configured_records',
+            'data_snapshot': business, 'knowledge_source': corpus['data_source'], 'reasoning_mode': mode,
             'elapsed_ms': round((perf_counter() - started) * 1000), **state}

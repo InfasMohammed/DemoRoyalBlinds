@@ -8,8 +8,8 @@ class ProjectRequest(BaseModel):
     customer: str = Field(min_length=2, max_length=100)
     project_name: str = Field(min_length=2, max_length=120)
     brief: str = Field(min_length=10, max_length=4000)
-    product: Literal['motorized_roller', 'manual_roller', 'curtain'] = 'motorized_roller'
-    fabric_id: Literal['linen_blackout', 'solar_screen', 'premium_blackout'] = 'linen_blackout'
+    product: str = Field(default='motorized_roller', min_length=1, max_length=100, pattern=r'^[A-Za-z0-9_-]+$')
+    fabric_id: str = Field(default='linen_blackout', min_length=1, max_length=100, pattern=r'^[A-Za-z0-9_-]+$')
     quantity: int = Field(default=24, ge=1, le=500)
     width_m: float = Field(default=1.8, ge=0.3, le=4)
     height_m: float = Field(default=2.4, ge=0.5, le=5)

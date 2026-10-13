@@ -10,7 +10,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .catalog import FABRICS, PRODUCTS, today
+from .catalog import today
+from .business_data import BusinessDataUnavailable, load_operations, data_source
 from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery
 from .knowledge import answer_question, portfolio
 from .llm import chat_info
@@ -27,9 +28,11 @@ app = FastAPI(title='Royal Blinds · Operations Studio', version='0.1.0',
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','),
                    allow_methods=['GET', 'POST'], allow_headers=['Content-Type'])
 store = ReportStore()
+data_source()
 chat_info()  # Validate endpoint/model settings at startup without making requests.
 
 
+@app.exception_handler(BusinessDataUnavailable)
 @app.exception_handler(StorageUnavailable)
 async def storage_error(request, exc):
     return JSONResponse(status_code=503, content={'detail': str(exc)})
@@ -37,14 +40,16 @@ async def storage_error(request, exc):
 
 @app.get('/api/health')
 def health():
+    business = load_operations()
     return {'status': 'ok', 'storage_mode': store.mode,
             'reasoning_mode': 'live_ai_configured' if llm_enabled() else 'rule_based_demo',
-            'data_mode': 'synthetic_demo', 'today': today().isoformat(), 'chat_provider': chat_info()}
+            'data_mode': 'synthetic_demo' if business['is_sample'] else 'configured_records', 'today': today().isoformat(), 'chat_provider': chat_info(),
+            'business_data_source': business['data_source'], 'business_data_fetched_at': business['fetched_at']}
 
 
 @app.get('/api/catalog')
 def catalog():
-    return {'fabrics': FABRICS, 'products': PRODUCTS, 'data_mode': 'synthetic_demo'}
+    return load_operations()
 
 
 @app.get('/api/knowledge/portfolio')
@@ -64,7 +69,10 @@ def knowledge_answer(request: KnowledgeQuery):
 def analyze(request: ProjectRequest):
     if request.due_date < today():
         raise HTTPException(422, 'Requested completion date must be today or later.')
-    report = run_workflow(request)
+    try:
+        report = run_workflow(request)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     store.save(report)
     return report
 

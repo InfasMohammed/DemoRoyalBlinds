@@ -54,7 +54,7 @@ grant select, insert, update on public.company_products, public.company_knowledg
                                             literal(p['source_url']), literal(json.dumps(p['quote_products'])) + '::jsonb']) + ')')
     sql += 'insert into public.company_products (id, name, category, source_url, quote_products) values\n'
     sql += ',\n'.join(product_rows)
-    sql += '\non conflict (id) do update set name=excluded.name, category=excluded.category, source_url=excluded.source_url, quote_products=excluded.quote_products;\n\n'
+    sql += '\non conflict (id) do nothing;\n\n'
     chunk_rows = []
     for c in CHUNKS:
         ids = 'array[' + ','.join(literal(i) for i in c['product_ids']) + ']::text[]'
@@ -65,15 +65,23 @@ grant select, insert, update on public.company_products, public.company_knowledg
     sql += 'insert into public.company_knowledge_chunks (id, document_id, title, heading, category, product_ids, content, source_url, source_kind, captured_on) values\n'
     sql += ',\n'.join(chunk_rows)
     sql += """
-on conflict (id) do update set
-  document_id=excluded.document_id, title=excluded.title, heading=excluded.heading,
-  category=excluded.category, product_ids=excluded.product_ids,
-  source_url=excluded.source_url, source_kind=excluded.source_kind,
-  captured_on=excluded.captured_on, content=excluded.content,
-  embedding=case when company_knowledge_chunks.content=excluded.content
-    then company_knowledge_chunks.embedding else null end,
-  embedding_model=case when company_knowledge_chunks.content=excluded.content
-    then company_knowledge_chunks.embedding_model else null end;
+on conflict (id) do nothing;
+
+-- Preserve database edits on reruns. Changed text invalidates old embeddings.
+create or replace function public.clear_changed_knowledge_embedding()
+returns trigger language plpgsql set search_path = public, pg_temp
+as $trigger$
+begin
+  if new.content is distinct from old.content then
+    new.embedding := null;
+    new.embedding_model := null;
+  end if;
+  return new;
+end;
+$trigger$;
+drop trigger if exists knowledge_content_changed on public.company_knowledge_chunks;
+create trigger knowledge_content_changed before update on public.company_knowledge_chunks
+for each row execute function public.clear_changed_knowledge_embedding();
 
 create or replace function public.match_company_knowledge(
   query_embedding extensions.vector(1536),

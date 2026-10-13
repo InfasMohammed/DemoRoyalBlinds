@@ -1,0 +1,212 @@
+{
+  "fabrics": [
+    {
+      "id": "linen_blackout",
+      "name": "Linen-look blackout",
+      "sku": "DEMO-FAB-101",
+      "roll_width_m": 3.2,
+      "stock_lm": 28.0,
+      "cost_per_lm": 52.0,
+      "lead_days": 7,
+      "transmission": "Blackout",
+      "color": "Warm ivory",
+      "compatible": [
+        "motorized_roller",
+        "manual_roller",
+        "curtain"
+      ],
+      "source": "Demo warehouse \u00b7 WH-001"
+    },
+    {
+      "id": "solar_screen",
+      "name": "Solar screen \u00b7 5% openness",
+      "sku": "DEMO-FAB-102",
+      "roll_width_m": 3.0,
+      "stock_lm": 90.0,
+      "cost_per_lm": 44.0,
+      "lead_days": 5,
+      "transmission": "Filtered light",
+      "color": "Stone grey",
+      "compatible": [
+        "motorized_roller",
+        "manual_roller"
+      ],
+      "source": "Demo warehouse \u00b7 WH-002"
+    },
+    {
+      "id": "premium_blackout",
+      "name": "Performance blackout",
+      "sku": "DEMO-FAB-103",
+      "roll_width_m": 3.2,
+      "stock_lm": 120.0,
+      "cost_per_lm": 65.0,
+      "lead_days": 4,
+      "transmission": "Blackout",
+      "color": "Soft white",
+      "compatible": [
+        "motorized_roller",
+        "manual_roller",
+        "curtain"
+      ],
+      "source": "Demo warehouse \u00b7 WH-003"
+    }
+  ],
+  "products": {
+    "motorized_roller": {
+      "name": "Motorized roller blinds",
+      "hardware_aed": 85,
+      "motor_aed": 245,
+      "labor_hours": 0.55,
+      "install_hours": 0.4,
+      "max_width_m": 3.0,
+      "max_height_m": 3.5,
+      "estimation_kind": "roller",
+      "knowledge_product_id": "roller_blinds",
+      "width_allowance_m": 0.1,
+      "length_allowance_m": 0.25,
+      "fullness": 1,
+      "source": "Sample product specification \u00b7 motorized_roller"
+    },
+    "manual_roller": {
+      "name": "Manual roller blinds",
+      "hardware_aed": 65,
+      "motor_aed": 0,
+      "labor_hours": 0.4,
+      "install_hours": 0.3,
+      "max_width_m": 3.0,
+      "max_height_m": 3.5,
+      "estimation_kind": "roller",
+      "knowledge_product_id": "roller_blinds",
+      "width_allowance_m": 0.1,
+      "length_allowance_m": 0.25,
+      "fullness": 1,
+      "source": "Sample product specification \u00b7 manual_roller"
+    },
+    "curtain": {
+      "name": "Curtains with manual tracks",
+      "hardware_aed": 95,
+      "motor_aed": 0,
+      "labor_hours": 0.85,
+      "install_hours": 0.5,
+      "max_width_m": 4.0,
+      "max_height_m": 4.0,
+      "estimation_kind": "curtain",
+      "knowledge_product_id": "curtains",
+      "width_allowance_m": 0,
+      "length_allowance_m": 0.3,
+      "fullness": 2,
+      "source": "Sample product specification \u00b7 curtain"
+    }
+  },
+  "policy": {
+    "labor_aed_hour": 45,
+    "installation_aed_hour": 65,
+    "margin_fraction": 0.3,
+    "vat_fraction": 0.05,
+    "waste_fraction": 0.08,
+    "factory_hours_day": 6,
+    "installation_hours_day": 6,
+    "queue_business_days": 2,
+    "source": "Demo estimating policy \u00b7 EST-001",
+    "quality_business_days": 1,
+    "working_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "holidays": [],
+    "currency": "AED",
+    "quote_exclusions": [
+      "Electrical work and power supply",
+      "Scaffolding / special access",
+      "Structural alterations",
+      "Delivery charges and nonstandard hardware"
+    ]
+  },
+  "checklists": {
+    "motorized_roller": [
+      "Confirm each opening by site survey; record tolerances.",
+      "Approve a physical fabric sample and light-control specification.",
+      "Inspect fabric for defects before cutting and record batch traceability.",
+      "Check finished dimensions, alignment and smooth operation.",
+      "Check fixing substrate, access conditions and installer safety plan.",
+      "Qualified installer to verify power, motor load and wiring.",
+      "Test limit settings, remote pairing and safe operation."
+    ],
+    "manual_roller": [
+      "Confirm each opening by site survey; record tolerances.",
+      "Approve a physical fabric sample and light-control specification.",
+      "Inspect fabric for defects before cutting and record batch traceability.",
+      "Check finished dimensions, alignment and smooth operation.",
+      "Check fixing substrate, access conditions and installer safety plan.",
+      "Confirm applicable cord/chain safety requirements and fit approved restraints."
+    ],
+    "curtain": [
+      "Confirm each opening by site survey; record tolerances.",
+      "Approve a physical fabric sample and light-control specification.",
+      "Inspect fabric for defects before cutting and record batch traceability.",
+      "Check finished dimensions, alignment and smooth operation.",
+      "Check fixing substrate, access conditions and installer safety plan."
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "shortage",
+      "title": "The fabric shortfall",
+      "category": "MATERIAL PLANNING",
+      "description": "24 motorized blinds. Limited blackout stock. Find a viable alternative.",
+      "deadline_days": 35,
+      "request": {
+        "customer": "Demo \u00b7 Meridian Workspace",
+        "project_name": "Business Bay office fit-out",
+        "brief": "Supply and install motorized blackout roller blinds for 24 office windows. Warm neutral finish, remote control and a clean fit. Check material availability and delivery feasibility before confirming the estimate.",
+        "product": "motorized_roller",
+        "fabric_id": "linen_blackout",
+        "quantity": 24,
+        "width_m": 1.8,
+        "height_m": 2.4,
+        "site": "Business Bay, Dubai"
+      }
+    },
+    {
+      "id": "rush",
+      "title": "The urgent fit-out",
+      "category": "DELIVERY FEASIBILITY",
+      "description": "A five-day deadline. Check the supply chain and realistic completion.",
+      "deadline_days": 5,
+      "request": {
+        "customer": "Demo \u00b7 Meridian Workspace",
+        "project_name": "Business Bay office fit-out",
+        "brief": "Supply and install motorized blackout roller blinds for 24 office windows. Warm neutral finish, remote control and a clean fit. Check material availability and delivery feasibility before confirming the estimate.",
+        "product": "motorized_roller",
+        "fabric_id": "linen_blackout",
+        "quantity": 24,
+        "width_m": 1.8,
+        "height_m": 2.4,
+        "site": "Business Bay, Dubai"
+      }
+    },
+    {
+      "id": "ready",
+      "title": "The clear-to-review order",
+      "category": "END-TO-END WORKFLOW",
+      "description": "Available fabric and a flexible deadline. Prepare an estimate for review.",
+      "deadline_days": 35,
+      "request": {
+        "customer": "Demo \u00b7 Meridian Workspace",
+        "project_name": "Business Bay office fit-out",
+        "brief": "Supply and install motorized blackout roller blinds for 24 office windows. Warm neutral finish, remote control and a clean fit. Check material availability and delivery feasibility before confirming the estimate.",
+        "product": "motorized_roller",
+        "fabric_id": "premium_blackout",
+        "quantity": 24,
+        "width_m": 1.8,
+        "height_m": 2.4,
+        "site": "Business Bay, Dubai"
+      }
+    }
+  ],
+  "provenance": "Synthetic interview seed data; replace with approved company records.",
+  "is_sample": true
+}

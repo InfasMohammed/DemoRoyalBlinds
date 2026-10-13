@@ -9,10 +9,10 @@ from pathlib import Path
 from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel, Field
 from supabase import create_client
+from .business_data import data_source, load_database_knowledge
 from .llm import chat_enabled, structured_chat, embedding_key, failure_reason, OPENAI_URL
 
 DATA = json.loads((Path(__file__).parent / 'data' / 'company_knowledge.json').read_text())
-PRODUCTS = {p['id']: p for p in DATA['products']}
 STOP_WORDS = set('a an and are as at be by can do for from have how i in is it me of on or our that the their this to use what which with you your'.split())
 
 
@@ -39,9 +39,21 @@ CHUNKS = chunks()
 CHUNK_MAP = {c['id']: c for c in CHUNKS}
 
 
+def load_corpus():
+    if data_source() == 'supabase':
+        return load_database_knowledge()
+    return {**DATA, 'chunks': CHUNKS, 'data_source': 'demo'}
+
+
 def portfolio():
-    return {**DATA, 'documents': [{**d, 'sections': len(d['sections'])} for d in DATA['documents']],
-            'chunk_count': len(CHUNKS)}
+    corpus = load_corpus()
+    documents = {}
+    for c in corpus['chunks']:
+        doc = documents.setdefault(c['document_id'], {key: c[key] for key in ('title', 'category', 'source_url')})
+        doc['id'] = c['document_id']
+        doc['sections'] = doc.get('sections', 0) + 1
+    return {key: value for key, value in {**corpus, 'documents': list(documents.values()),
+            'chunk_count': len(corpus['chunks'])}.items() if key != 'chunks'}
 
 
 def tokens(text):
@@ -51,9 +63,10 @@ def tokens(text):
             for t in re.findall(r'[a-z0-9]+', text) if t not in STOP_WORDS]
 
 
-def local_search(question, category=None, product_id=None, limit=4):
+def local_search(question, category=None, product_id=None, limit=4, corpus=None):
     # BM25 ranks original wording; scores are relevance, never confidence.
-    candidates = [c for c in CHUNKS if (not category or c['category'] == category)
+    corpus = corpus or load_corpus()
+    candidates = [c for c in corpus['chunks'] if (not category or c['category'] == category)
                   and (not product_id or not c['product_ids'] or product_id in c['product_ids'])]
     texts = [tokens(f"{c['title']} {c['heading']} {c['content']}") for c in candidates]
     if not texts:
@@ -81,10 +94,13 @@ def embedding_client():
                             request_timeout=25, max_retries=1)
 
 
-def retrieve(question, category=None, product_id=None, limit=4):
-    if product_id and product_id not in PRODUCTS:
+def retrieve(question, category=None, product_id=None, limit=4, corpus=None):
+    corpus = corpus or load_corpus()
+    products = {p['id']: p for p in corpus['products']}
+    chunk_map = {c['id']: c for c in corpus['chunks']}
+    if product_id and product_id not in products:
         raise ValueError('Unknown product identifier.')
-    if product_id and category and category not in ('smart', PRODUCTS[product_id]['category']):
+    if product_id and category and category not in ('smart', products[product_id]['category']):
         raise ValueError('Selected source area does not match this product.')
     warning = None
     if os.getenv('KNOWLEDGE_RETRIEVAL_MODE', 'local') == 'supabase_vector':
@@ -102,7 +118,7 @@ def retrieve(question, category=None, product_id=None, limit=4):
             # introduce unreviewed instructions or replace trusted citation URLs.
             citations = []
             for row in rows:
-                trusted = CHUNK_MAP.get(row['id'])
+                trusted = chunk_map.get(row['id'])
                 if not trusted or row['content'] != trusted['content']:
                     continue
                 if category and trusted['category'] != category:
@@ -113,11 +129,11 @@ def retrieve(question, category=None, product_id=None, limit=4):
                     citations.append({**trusted, 'score': round(float(row['similarity']), 4)})
             if not citations:
                 raise RuntimeError('No matching indexed corpus available.')
-            return {'citations': citations[:limit], 'retrieval_mode': 'supabase_vector', 'warning': None}
+            return {'citations': citations[:limit], 'retrieval_mode': 'supabase_vector', 'warning': None, 'knowledge_source': corpus['data_source']}
         except Exception:
-            warning = 'Vector retrieval unavailable or corpus not indexed; using the bundled keyword index.'
-    return {'citations': local_search(question, category, product_id, limit),
-            'retrieval_mode': 'local_keyword', 'warning': warning}
+            warning = 'Vector retrieval unavailable or corpus not indexed; using keyword search over the current knowledge records.'
+    return {'citations': local_search(question, category, product_id, limit, corpus),
+            'retrieval_mode': 'local_keyword', 'warning': warning, 'knowledge_source': corpus['data_source']}
 
 
 class GroundedAnswer(BaseModel):
@@ -129,7 +145,8 @@ TECHNICAL_GAP = re.compile(r'wind.*(?:speed|rating|load)|km\s*/?\s*h|\bmph\b|\bt
 
 
 def answer_question(question, category=None, product_id=None):
-    findings = retrieve(question, category, product_id)
+    corpus = load_corpus()
+    findings = retrieve(question, category, product_id, corpus=corpus)
     citations = findings['citations']
     needs_review = bool(TECHNICAL_GAP.search(question))
     generation_warning = None
@@ -167,5 +184,5 @@ def answer_question(question, category=None, product_id=None):
                 generation_mode = 'extractive_fallback'
                 generation_warning = failure_reason(exc)
     return {**findings, 'question': question, 'answer': answer, 'generation_mode': generation_mode,
-            'needs_review': needs_review or not citations, 'limitations': DATA['limitations'],
-            'provenance': DATA['provenance'], 'generation_warning': generation_warning}
+            'needs_review': needs_review or not citations, 'limitations': corpus['limitations'],
+            'provenance': corpus['provenance'], 'generation_warning': generation_warning}

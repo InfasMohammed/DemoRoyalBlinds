@@ -8,7 +8,8 @@ from supabase import create_client
 
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.knowledge import CHUNKS, embedding_client
+from app.knowledge import embedding_client
+from app.business_data import load_database_knowledge
 from app.llm import embedding_key
 
 
@@ -23,11 +24,10 @@ def main():
     client = create_client(url, key)
     existing = client.table('company_knowledge_chunks').select('id,content,embedding_model,embedding').execute().data
     rows = {row['id']: row for row in existing}
-    if any(c['id'] not in rows or rows[c['id']]['content'] != c['content'] for c in CHUNKS):
-        raise SystemExit('Apply the current supabase/knowledge_base.sql before indexing; bundled corpus does not match the database.')
-    pending = [c for c in CHUNKS if rows[c['id']]['embedding_model'] != 'text-embedding-3-small' or rows[c['id']]['embedding'] is None]
+    passages = load_database_knowledge()['chunks']
+    pending = [c for c in passages if rows[c['id']]['embedding_model'] != 'text-embedding-3-small' or rows[c['id']]['embedding'] is None]
     if not pending:
-        print(f'All {len(CHUNKS)} passages already indexed; no embedding requests needed.')
+        print(f'All {len(passages)} passages already indexed; no embedding requests needed.')
         return
     vectors = embedding_client().embed_documents([c['content'] for c in pending])
     if len(vectors) != len(pending) or any(len(v) != 1536 for v in vectors):
@@ -38,7 +38,7 @@ def main():
             'embedding': vector, 'embedding_model': 'text-embedding-3-small',
         }).eq('id', c['id']).eq('content', c['content']).execute().data
         if len(result) != 1:
-            raise SystemExit('A passage changed during indexing. Reapply the corpus and retry.')
+            raise SystemExit('A passage changed during indexing. Retry indexing the current database content.')
     probe = client.rpc('match_company_knowledge', {
         'query_embedding': vectors[0], 'match_count': 1,
     }).execute().data

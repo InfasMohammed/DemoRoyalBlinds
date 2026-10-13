@@ -49,7 +49,7 @@ insert into public.company_products (id, name, category, source_url, quote_produ
 ('awnings', 'Awnings', 'external', 'https://royalblinds.com/external-shades/awnings/', '[]'::jsonb),
 ('outdoor_furniture', 'Outdoor Furniture', 'external', 'https://royalblinds.com/external-shades/outdoor-furniture/', '[]'::jsonb),
 ('umbrellas', 'Umbrellas', 'external', 'https://royalblinds.com/external-shades/umbrellas/', '[]'::jsonb)
-on conflict (id) do update set name=excluded.name, category=excluded.category, source_url=excluded.source_url, quote_products=excluded.quote_products;
+on conflict (id) do nothing;
 
 insert into public.company_knowledge_chunks (id, document_id, title, heading, category, product_ids, content, source_url, source_kind, captured_on) values
 ('RB-INTERNAL-01', 'RB-INTERNAL', 'Internal Shades — portfolio', 'Interior applications', 'internal', array[]::text[], 'Transform your home''s interior with the exquisite collection of blinds and curtains from Royal Blinds LLC, available in Dubai and Abu Dhabi. Our internal shades blend functionality with comfort, adding a stylish touch to any room. With a diverse range of designs—modern, traditional, simple, and sleek, we ensure a perfect fit for every style. Our window blinds elevate the ambiance of your home or office, providing both comfort and style. With a vast collection of customizable internal shades and curtains, we cater to your specific preferences.', 'https://www.royalblinds.com/internal-shades/', 'user_supplied_website_copy', '2026-10-13'::date),
@@ -87,15 +87,23 @@ insert into public.company_knowledge_chunks (id, document_id, title, heading, ca
 ('RB-PRODUCT-awnings', 'RB-PRODUCT-awnings', 'Awnings', 'Product listing', 'external', array['awnings']::text[], 'The supplied external shades listing includes Awnings and links to this product page. Product-specific page text and technical specifications have not been supplied.', 'https://royalblinds.com/external-shades/awnings/', 'user_supplied_website_copy', '2026-10-13'::date),
 ('RB-PRODUCT-outdoor_furniture', 'RB-PRODUCT-outdoor_furniture', 'Outdoor Furniture', 'Product listing', 'external', array['outdoor_furniture']::text[], 'The supplied external shades listing includes Outdoor Furniture and links to this product page. Product-specific page text and technical specifications have not been supplied.', 'https://royalblinds.com/external-shades/outdoor-furniture/', 'user_supplied_website_copy', '2026-10-13'::date),
 ('RB-PRODUCT-umbrellas', 'RB-PRODUCT-umbrellas', 'Umbrellas', 'Product listing', 'external', array['umbrellas']::text[], 'The supplied external shades listing includes Umbrellas and links to this product page. Product-specific page text and technical specifications have not been supplied.', 'https://royalblinds.com/external-shades/umbrellas/', 'user_supplied_website_copy', '2026-10-13'::date)
-on conflict (id) do update set
-  document_id=excluded.document_id, title=excluded.title, heading=excluded.heading,
-  category=excluded.category, product_ids=excluded.product_ids,
-  source_url=excluded.source_url, source_kind=excluded.source_kind,
-  captured_on=excluded.captured_on, content=excluded.content,
-  embedding=case when company_knowledge_chunks.content=excluded.content
-    then company_knowledge_chunks.embedding else null end,
-  embedding_model=case when company_knowledge_chunks.content=excluded.content
-    then company_knowledge_chunks.embedding_model else null end;
+on conflict (id) do nothing;
+
+-- Preserve database edits on reruns. Changed text invalidates old embeddings.
+create or replace function public.clear_changed_knowledge_embedding()
+returns trigger language plpgsql set search_path = public, pg_temp
+as $trigger$
+begin
+  if new.content is distinct from old.content then
+    new.embedding := null;
+    new.embedding_model := null;
+  end if;
+  return new;
+end;
+$trigger$;
+drop trigger if exists knowledge_content_changed on public.company_knowledge_chunks;
+create trigger knowledge_content_changed before update on public.company_knowledge_chunks
+for each row execute function public.clear_changed_knowledge_embedding();
 
 create or replace function public.match_company_knowledge(
   query_embedding extensions.vector(1536),

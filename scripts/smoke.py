@@ -21,8 +21,13 @@ result = request('/projects/analyze', {
     'width_m': 1.8, 'height_m': 2.4, 'due_date': due, 'site': 'Demo site, Dubai',
 })
 assert len(result['traces']) == 6, 'All specialists must execute'
-assert result['status'] == 'awaiting_review', 'Stocked, flexible demo should reach review'
-assert result['costing']['total'] == 20404.27, 'Expected pricing result changed'
+assert result['data_snapshot']['data_source'] == health['business_data_source'], 'Report must use the configured business data'
+if health['business_data_source'] == 'demo':
+    assert result['status'] == 'awaiting_review', 'Stocked, flexible fixture should reach review'
+    assert result['costing']['total'] == 20404.27, 'Expected fixture pricing result changed'
+else:
+    assert result['costing']['total'] == round(result['costing']['subtotal'] + result['costing']['vat'], 2)
+    assert result['status'] in ('blocked', 'awaiting_review'), 'Coordinator must gate review'
 assert request('/projects/' + result['id'])['id'] == result['id'], 'Saved report must be readable'
 print('PASS: six specialists, fabric yield, AED pricing, schedule, review gate and report persistence.')
 print(f"Storage: {health['storage_mode']}; actual reasoning: {result['reasoning_mode']}.")
