@@ -7,7 +7,7 @@ export type ProjectInput = {
 export type Fabric = { id: ProjectInput['fabric_id']; name: string; sku: string; roll_width_m: number;
   stock_lm: number; cost_per_lm: number; lead_days: number; transmission: string; color: string; compatible: string[]; source: string }
 export type Trace = { agent: string; role: string; summary: string; recommendation: string; sources: string[];
-  facts: Record<string, unknown>; mode: string; duration_ms: number;
+  facts: Record<string, unknown>; mode: string; duration_ms: number; fallback_reason?: string;
   citations?: { id: string; title: string; heading: string; source_url: string; content: string }[] }
 export type Report = {
   id: string; created_at: string; status: 'blocked' | 'awaiting_review' | 'demo_approved';

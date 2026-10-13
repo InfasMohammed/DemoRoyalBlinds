@@ -13,7 +13,8 @@ type Portfolio = {
 }
 type Citation = { id: string; title: string; heading: string; source_url: string; content: string; category: string }
 type Answer = { question: string; answer: string; citations: Citation[]; generation_mode: string;
-  retrieval_mode: string; needs_review: boolean; warning: string | null; provenance: string }
+  retrieval_mode: string; needs_review: boolean; warning: string | null; provenance: string;
+  generation_warning?: string | null }
 
 export default function KnowledgeStudio({ onQuote, quoteReady }: { onQuote: (product: ProjectInput['product']) => void; quoteReady: boolean }) {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
@@ -54,7 +55,7 @@ export default function KnowledgeStudio({ onQuote, quoteReady }: { onQuote: (pro
         { text: 'Phone & battery controls', query: 'Can motorized roller blinds use smartphone control and a rechargeable battery?', category: 'smart' },
         { text: 'Missing wind ratings', query: 'What is the maximum wind speed rating for awnings?', category: 'external' },
       ].map(item => <button disabled={busy || !portfolio} key={item.text} onClick={() => { setQuestion(item.query); setCategory(item.category); setProductId(''); void ask(undefined, { question: item.query, category: item.category, product_id: '' }) }}>{item.text}<ArrowUpRight size={12} /></button>)}</div>
-      {answer && <div className="knowledge-answer" aria-live="polite"><div className="section-heading"><h4>{answer.needs_review ? 'More evidence required' : 'Findings from your sources'}</h4><span className={`pill ${answer.needs_review ? 'amber' : 'green'}`}>{({ llm: 'RAG answer', extractive: 'Source excerpts', extractive_fallback: 'Source excerpts · AI unavailable', evidence_gap: 'Human review', no_evidence: 'No evidence' } as Record<string, string>)[answer.generation_mode]}</span></div><p className="answer-question">{answer.question}</p><p className="answer-body">{answer.answer}</p><div className="answer-mode"><BookOpen size={14} />{answer.retrieval_mode === 'supabase_vector' ? 'Supabase vector retrieval' : 'Local keyword retrieval'} · User-supplied website copy</div>{answer.warning && <div className="inline-warning"><CircleAlert size={16} />{answer.warning}</div>}
+      {answer && <div className="knowledge-answer" aria-live="polite"><div className="section-heading"><h4>{answer.needs_review ? 'More evidence required' : 'Findings from your sources'}</h4><span className={`pill ${answer.needs_review ? 'amber' : 'green'}`}>{({ llm: 'RAG answer', extractive: 'Source excerpts', extractive_fallback: 'Source excerpts · AI unavailable', evidence_gap: 'Human review', no_evidence: 'No evidence' } as Record<string, string>)[answer.generation_mode]}</span></div><p className="answer-question">{answer.question}</p><p className="answer-body">{answer.answer}</p><div className="answer-mode"><BookOpen size={14} />{answer.retrieval_mode === 'supabase_vector' ? 'Supabase vector retrieval' : 'Local keyword retrieval'} · User-supplied website copy</div>{answer.warning && <div className="inline-warning"><CircleAlert size={16} />{answer.warning}</div>}{answer.generation_warning && <div className="inline-warning"><CircleAlert size={16} />{answer.generation_warning}</div>}
         <div className="knowledge-citations">{answer.citations.map(citation => <article key={citation.id}><a href={citation.source_url} target="_blank" rel="noopener noreferrer"><FileText size={15} /><span>{citation.title}<small>{citation.heading} · {citation.id}</small></span><ArrowUpRight size={15} /></a><details><summary>Read retrieved passage</summary><p>{citation.content}</p></details></article>)}</div>
       </div>}
     </section>

@@ -15,7 +15,7 @@ The company knowledge base contains website text and links supplied by the user.
 | React / TypeScript | Dashboard, intake form, reports, evidence inspector, quotation and review |
 | Node.js / Vite | Frontend development server, build and browser tests |
 | Supabase | Optional Postgres report storage and pgvector retrieval through the trusted backend |
-| OpenAI via LangChain | Optional specialist reasoning, retrieval-grounded answers and embeddings |
+| OpenAI / NVIDIA chat APIs | Optional specialist summaries and retrieval-grounded answers; OpenAI embeddings for optional vector search |
 
 Node.js powers the React development and build workflow. Python owns the application API; a second Node API is unnecessary for this scope.
 
@@ -66,7 +66,20 @@ On Linux/macOS/WSL, the equivalent backend commands are `cd backend`, `uv sync -
 
 ## Enable real AI reasoning
 
-Copy `backend/.env.example` to `backend/.env` without overwriting an existing configuration. Set `LLM_API_KEY` securely in that backend file or in your environment secret settings, and restart FastAPI. Do not commit keys or put them in React variables. The default model is `gpt-4.1-mini`; change `LLM_MODEL` if needed. Requests go to `api.openai.com`; allow that destination if your cloud network policy requires it.
+Copy `backend/.env.example` to `backend/.env` without overwriting an existing configuration. Set `LLM_API_KEY` securely in that backend file or in your environment secret settings, and restart FastAPI. Do not commit keys or put them in React variables. The default endpoint is `https://api.openai.com/v1` with model `gpt-4.1-mini`.
+
+For the NVIDIA-hosted model from your NVIDIA Build example, use:
+
+```dotenv
+LLM_BASE_URL=https://integrate.api.nvidia.com/v1
+LLM_MODEL=openai/gpt-oss-20b
+LLM_API_KEY=
+KNOWLEDGE_RETRIEVAL_MODE=local
+```
+
+Enter your NVIDIA API key in `LLM_API_KEY` privately. An existing `NVIDIA_API_KEY` environment variable is also supported when the NVIDIA endpoint is selected and `LLM_API_KEY` is blank. The sample string `"$NVIDIA_API_KEY"` is a placeholder; Python does not expand it. In standalone Python code use `os.environ["NVIDIA_API_KEY"]` instead. Allow `integrate.api.nvidia.com` in a restricted cloud network policy. Hosted access, credits and rate limits depend on your NVIDIA account; this configuration does not guarantee unlimited free use.
+
+The NVIDIA adapter uses ordinary chat completions, asks for JSON and validates the answer with Pydantic. It does not assume NVIDIA supports OpenAI's strict JSON-schema API feature. The provider's separate `reasoning_content` is neither displayed nor saved. Invalid or incomplete output falls back to labeled tool summaries or source excerpts. OpenAI retains its native structured-response adapter. `/api/health` reports the selected provider/model and whether a key is configured, without returning credentials.
 
 With a key, all six nodes call the model with their calculated facts and record structured summaries and recommendations. Prices, dates and approval decisions still come from Python calculations. A provider failure is visibly labeled `rules_fallback`, not treated as successful AI execution. Key presence is only configuration evidence; confirm actual `llm` findings in the agent trace.
 
@@ -158,7 +171,7 @@ The current estimating workflow supports motorized rollers, manual rollers and m
 
 This version is for a private interview demo. FastAPI has no user authentication: reviewer names are attestations, not verified identities. Supabase RLS protects direct browser database access, but does not authenticate the API. Before public deployment, add Supabase Auth, backend JWT validation, role checks, per-user/organization report access, rate limiting and an immutable audit log. Local JSON storage supports one backend process only; use Supabase for multiple processes. Inventory reservations, supplier commitments and real production integrations are separate implementation work.
 
-Live OpenAI and Supabase integration need your configured accounts and were not verified without credentials. Local demo behavior and mocked AI outage handling can be tested independently.
+Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local demo behavior, the NVIDIA request/response adapter and provider failure handling are tested independently with mocked API transport.
 
 ## Product knowledge and RAG
 
@@ -186,7 +199,9 @@ Vector failure or an unindexed corpus visibly falls back to local retrieval. Mod
 
 To prepare Supabase knowledge storage, run [supabase/knowledge_base.sql](supabase/knowledge_base.sql) in the SQL editor. **This is a separate migration from `demo_setup.sql`.** It adds `company_products`, `company_knowledge_chunks` and the `match_company_knowledge` RPC, retaining unchanged embeddings on repeat runs. Changed passage text clears its old embedding. It neither changes existing project reports nor enables anonymous access. All access stays on the backend service role.
 
-SQL seeds the source text; it does not generate embeddings. Once `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `LLM_API_KEY` are securely configured, run:
+SQL seeds the source text; it does not generate embeddings. For NVIDIA chat, keep local retrieval to use RAG without an embedding API. Optional vector indexing currently uses OpenAI's `text-embedding-3-small`, so it requires a separate OpenAI key in `EMBEDDING_API_KEY`. The NVIDIA chat key is never sent to OpenAI. Existing OpenAI chat deployments may reuse their `LLM_API_KEY` when `EMBEDDING_API_KEY` is blank.
+
+Once `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the embedding key are securely configured, run:
 
 ```bash
 cd /workspace/DemoRoyalBlinds

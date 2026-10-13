@@ -11,6 +11,9 @@ from app.store import ReportStore
 @pytest.fixture(autouse=True)
 def demo_context(monkeypatch, tmp_path):
     monkeypatch.delenv('LLM_API_KEY', raising=False)
+    monkeypatch.delenv('NVIDIA_API_KEY', raising=False)
+    monkeypatch.setenv('LLM_BASE_URL', 'https://api.openai.com/v1')
+    monkeypatch.setenv('LLM_MODEL', 'gpt-4.1-mini')
     monkeypatch.delenv('SUPABASE_URL', raising=False)
     monkeypatch.delenv('SUPABASE_SERVICE_ROLE_KEY', raising=False)
     monkeypatch.setenv('DEMO_STORE_PATH', str(tmp_path / 'reports.json'))
@@ -128,10 +131,10 @@ def test_invalid_inputs_and_past_deadline_rejected():
 def test_ai_outage_is_visible_and_does_not_change_rules(monkeypatch):
     monkeypatch.setenv('LLM_API_KEY', 'test-placeholder')
 
-    def unavailable(**kwargs):
+    def unavailable(*args, **kwargs):
         raise RuntimeError('Provider unavailable')
 
-    monkeypatch.setattr(workflow, 'ChatOpenAI', unavailable)
+    monkeypatch.setattr(workflow, 'structured_chat', unavailable)
     result = workflow.run_workflow(project())
     assert result['reasoning_mode'] == 'ai_with_fallback'
     assert all(trace['mode'] == 'rules_fallback' for trace in result['traces'])

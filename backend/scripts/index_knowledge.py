@@ -9,12 +9,17 @@ from supabase import create_client
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.knowledge import CHUNKS, embedding_client
+from app.llm import embedding_key
 
 
 def main():
     url, key = os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-    if not url or not key or not os.getenv('LLM_API_KEY'):
-        raise SystemExit('Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and LLM_API_KEY securely before indexing.')
+    if not url or not key:
+        raise SystemExit('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY securely before indexing.')
+    try:
+        embedding_key()
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     client = create_client(url, key)
     existing = client.table('company_knowledge_chunks').select('id,content,embedding_model,embedding').execute().data
     rows = {row['id']: row for row in existing}

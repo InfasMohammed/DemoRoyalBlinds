@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from .catalog import FABRICS, PRODUCTS, today
 from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery
 from .knowledge import answer_question, portfolio
+from .llm import chat_info
 from .store import ReportStore, StorageUnavailable
 from .workflow import llm_enabled, run_workflow
 
@@ -26,6 +27,7 @@ app = FastAPI(title='Royal Blinds · Operations Studio', version='0.1.0',
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','),
                    allow_methods=['GET', 'POST'], allow_headers=['Content-Type'])
 store = ReportStore()
+chat_info()  # Validate endpoint/model settings at startup without making requests.
 
 
 @app.exception_handler(StorageUnavailable)
@@ -37,7 +39,7 @@ async def storage_error(request, exc):
 def health():
     return {'status': 'ok', 'storage_mode': store.mode,
             'reasoning_mode': 'live_ai_configured' if llm_enabled() else 'rule_based_demo',
-            'data_mode': 'synthetic_demo', 'today': today().isoformat()}
+            'data_mode': 'synthetic_demo', 'today': today().isoformat(), 'chat_provider': chat_info()}
 
 
 @app.get('/api/catalog')

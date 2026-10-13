@@ -10,6 +10,9 @@ from app.models import ProjectRequest
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
     monkeypatch.delenv('LLM_API_KEY', raising=False)
+    monkeypatch.delenv('NVIDIA_API_KEY', raising=False)
+    monkeypatch.setenv('LLM_BASE_URL', 'https://api.openai.com/v1')
+    monkeypatch.setenv('LLM_MODEL', 'gpt-4.1-mini')
     monkeypatch.setenv('KNOWLEDGE_RETRIEVAL_MODE', 'local')
 
 
@@ -118,7 +121,7 @@ def test_generated_answer_rejects_invented_citations(monkeypatch):
         def invoke(self, messages):
             return knowledge.GroundedAnswer(answer='Fake claim [INVENTED]', cited_chunk_ids=['INVENTED'])
 
-    monkeypatch.setattr(knowledge, 'ChatOpenAI', lambda **kwargs: Model())
+    monkeypatch.setattr(knowledge, 'structured_chat', lambda schema, messages: Model().invoke(messages))
     result = knowledge.answer_question('battery power', 'smart')
     assert result['generation_mode'] == 'extractive_fallback'
     assert 'Fake claim' not in result['answer']
@@ -134,7 +137,7 @@ def test_valid_generated_answer_is_labeled_as_rag(monkeypatch):
         def invoke(self, messages):
             return knowledge.GroundedAnswer(answer='The supplied copy describes battery or mains power [RB-SMART-03].', cited_chunk_ids=['RB-SMART-03'])
 
-    monkeypatch.setattr(knowledge, 'ChatOpenAI', lambda **kwargs: Model())
+    monkeypatch.setattr(knowledge, 'structured_chat', lambda schema, messages: Model().invoke(messages))
     result = knowledge.answer_question('battery or mains power', 'smart')
     assert result['generation_mode'] == 'llm'
     assert '[RB-SMART-03]' in result['answer']
