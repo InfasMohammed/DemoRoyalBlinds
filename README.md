@@ -43,6 +43,7 @@ The selected provider receives the submitted brief and relevant project facts. T
 
 1. Create a dedicated **demo** Supabase project.
 2. Run [supabase/schema.sql](supabase/schema.sql) in its SQL editor.
+   To also populate three complete, dashboard-compatible synthetic reports, run [supabase/demo_setup.sql](supabase/demo_setup.sql) instead. It includes the table schema and preserves existing reports on reruns. These fixtures are labeled **Seeded demo**; their SQL calculations do not execute LangGraph or an LLM. Analyze a fresh brief to run the agent workflow.
 3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` securely on the FastAPI backend. Both must be present, or both absent. The key can be a current server secret key (`sb_secret_...`) or a legacy `service_role` key; a publishable/anon key cannot access this table. Keep the variable name `SUPABASE_SERVICE_ROLE_KEY` for either server key format.
 4. Restart the backend. Analyze a project and verify it appears in `public.demo_reports` and survives a restart.
 
