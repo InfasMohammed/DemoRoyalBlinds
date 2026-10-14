@@ -7,35 +7,62 @@ for (const variant of ['missing snapshot', 'different source', 'before approval'
     const preset = catalog.scenarios.find((item: { id: string }) => item.id === 'ready')
     const due = new Date(`${runtime.today}T12:00:00Z`)
     due.setUTCDate(due.getUTCDate() + 60)
-    const saved = await (await request.post('/api/projects/analyze', { data: {
-      ...preset.request, project_name: `Legacy ${variant}`, quantity: 4, due_date: due.toISOString().slice(0, 10),
-    } })).json()
+    const saved = await (
+      await request.post('/api/projects/analyze', {
+        data: {
+          ...preset.request,
+          project_name: `Legacy ${variant}`,
+          quantity: 4,
+          due_date: due.toISOString().slice(0, 10),
+        },
+      })
+    ).json()
     const legacy = { ...saved }
-    if (variant === 'different source') legacy.data_snapshot = { ...saved.data_snapshot, data_source: 'supabase' }
+    if (variant === 'different source')
+      legacy.data_snapshot = { ...saved.data_snapshot, data_source: 'supabase' }
     else delete legacy.data_snapshot
     if (variant !== 'before approval') {
       legacy.status = 'demo_approved'
-      legacy.approval = { reviewer: 'Original reviewer', approved_at: saved.created_at, scope: 'Original review' }
+      legacy.approval = {
+        reviewer: 'Original reviewer',
+        approved_at: saved.created_at,
+        scope: 'Original review',
+      }
       legacy.execution = {
-        status: 'blocked', reason: 'Analyze a new quotation using Supabase business data before execution.',
-        work_order: null, reservation: null, tasks: [], bookings: [], events: [], agent_findings: [], updated_at: saved.created_at,
+        status: 'blocked',
+        reason: 'Analyze a new quotation using Supabase business data before execution.',
+        work_order: null,
+        reservation: null,
+        tasks: [],
+        bookings: [],
+        events: [],
+        agent_findings: [],
+        updated_at: saved.created_at,
       }
     }
     const oldActions: string[] = []
-    page.on('request', req => {
+    page.on('request', (req) => {
       if (req.method() === 'POST' && req.url().includes(saved.id)) oldActions.push(req.url())
     })
-    await page.route('**/api/projects', route => route.fulfill({ json: [legacy] }))
+    await page.route('**/api/projects', (route) => route.fulfill({ json: [legacy] }))
     await page.goto('/')
     await page.getByRole('button', { name: /Project reports/ }).click()
     await page.getByRole('button', { name: 'Open', exact: true }).click()
-    if (variant === 'before approval') await expect(page.getByRole('button', { name: 'Review estimate' })).toBeDisabled()
+    if (variant === 'before approval')
+      await expect(page.getByRole('button', { name: 'Review estimate' })).toBeDisabled()
     await page.getByRole('tab', { name: 'Work order', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Retry execution' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Create fresh quotation', exact: true }).click()
-    await expect(page.getByRole('dialog').getByLabel('Project name', { exact: true })).toHaveValue(saved.request.project_name)
-    await expect(page.getByRole('dialog').getByLabel('Customer / organization')).toHaveValue(saved.request.customer)
-    const analyzed = page.waitForResponse(response => response.url().endsWith('/api/projects/analyze') && response.request().method() === 'POST')
+    await expect(page.getByRole('dialog').getByLabel('Project name', { exact: true })).toHaveValue(
+      saved.request.project_name,
+    )
+    await expect(page.getByRole('dialog').getByLabel('Customer / organization')).toHaveValue(
+      saved.request.customer,
+    )
+    const analyzed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/projects/analyze') && response.request().method() === 'POST',
+    )
     await page.getByRole('button', { name: 'Analyze project', exact: true }).click()
     const fresh = await (await analyzed).json()
     expect(fresh.id).not.toBe(saved.id)
@@ -46,23 +73,31 @@ for (const variant of ['missing snapshot', 'different source', 'before approval'
     expect(oldActions).toEqual([])
     await page.getByRole('button', { name: /Project reports/ }).click()
     // Reports keep both analyses; the original approval is never copied to the new result.
-    await expect(page.getByRole('row').filter({ hasText: saved.request.project_name })).toHaveCount(2)
+    await expect(page.getByRole('row').filter({ hasText: saved.request.project_name })).toHaveCount(
+      2,
+    )
     await expect(page.getByRole('row').filter({ hasText: saved.id.slice(0, 8) })).toContainText(
-      variant === 'before approval' ? 'Awaiting review' : 'Demo approved')
+      variant === 'before approval' ? 'Awaiting review' : 'Demo approved',
+    )
   })
 }
 
-test('approval reserves material, production consumes it and quality gates installation', async ({ page }) => {
+test('approval reserves material, production consumes it and quality gates installation', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.getByRole('button', { name: /The clear-to-review order/ }).click()
   await page.getByLabel('Openings', { exact: true }).fill('4')
   await page.getByRole('button', { name: 'Analyze project' }).click()
   await page.getByRole('button', { name: 'Review estimate' }).click()
   await page.getByLabel('Reviewer name').fill('Demo operator')
-  for (const label of ['I reviewed the sample measurements and survey assumptions.',
+  for (const label of [
+    'I reviewed the sample measurements and survey assumptions.',
     'I reviewed the product, fabric and installation checklist.',
     'I reviewed the cost breakdown, deadline and exclusions.',
-    'I authorize demo material reservation and work-order creation.']) await page.getByLabel(label).check()
+    'I authorize demo material reservation and work-order creation.',
+  ])
+    await page.getByLabel(label).check()
   await page.getByRole('button', { name: 'Approve demo estimate' }).click()
   await expect(page.getByRole('heading', { name: 'Work order & execution' })).toBeVisible()
   await expect(page.getByText('Ready for production', { exact: true })).toBeVisible()
@@ -72,19 +107,31 @@ test('approval reserves material, production consumes it and quality gates insta
   await page.getByRole('button', { name: 'Confirm start production', exact: true }).click()
   await expect(page.getByText('In production', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Record manufacturing complete', exact: true }).click()
-  await page.getByLabel('I confirm manufacturing is finished and authorize consuming the reserved demo material.').check()
-  await page.getByRole('button', { name: 'Confirm record manufacturing complete', exact: true }).click()
+  await page
+    .getByLabel(
+      'I confirm manufacturing is finished and authorize consuming the reserved demo material.',
+    )
+    .check()
+  await page
+    .getByRole('button', { name: 'Confirm record manufacturing complete', exact: true })
+    .click()
   await expect(page.getByText('Awaiting quality checks', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Record installation complete', exact: true })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Record installation complete', exact: true }),
+  ).toHaveCount(0)
   await page.getByRole('button', { name: 'Pass quality checks', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Confirm pass quality checks', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: 'Confirm pass quality checks', exact: true }),
+  ).toBeDisabled()
   const checks = page.locator('.execution-form input[type="checkbox"]')
-  for (let i = 0; i < await checks.count(); i++) await checks.nth(i).check()
+  for (let i = 0; i < (await checks.count()); i++) await checks.nth(i).check()
   await page.getByRole('button', { name: 'Confirm pass quality checks', exact: true }).click()
   await expect(page.getByText('Ready for installation', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Record installation complete', exact: true }).click()
   await page.getByLabel('I confirm this demo progress record is accurate.').check()
-  await page.getByRole('button', { name: 'Confirm record installation complete', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Confirm record installation complete', exact: true })
+    .click()
   await expect(page.locator('.execution-panel .section-heading')).toContainText('Completed')
   await expect(page.locator('.execution-events')).toContainText('Demo operator')
   await page.reload()
@@ -104,7 +151,7 @@ test('cancellation releases resources and work-order layout fits mobile', async 
   await page.getByRole('button', { name: 'Review estimate' }).click()
   await page.getByLabel('Reviewer name').fill('Cancellation reviewer')
   const approvals = page.locator('.approval-checks input[type="checkbox"]')
-  for (let i = 0; i < await approvals.count(); i++) await approvals.nth(i).check()
+  for (let i = 0; i < (await approvals.count()); i++) await approvals.nth(i).check()
   await page.getByRole('button', { name: 'Approve demo estimate' }).click()
   await page.getByRole('button', { name: 'Cancel work order', exact: true }).click()
   await page.getByLabel('Progress note').fill('Client cancelled before manufacturing.')
@@ -112,5 +159,7 @@ test('cancellation releases resources and work-order layout fits mobile', async 
   await page.getByRole('button', { name: 'Confirm cancel work order', exact: true }).click()
   await expect(page.locator('.execution-panel .section-heading')).toContainText('Cancelled')
   await expect(page.getByText('Material released', { exact: true })).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(
+    false,
+  )
 })

@@ -18,6 +18,7 @@ dependencies = [
 dev = [
     "pytest==8.3.5",
     "httpx==0.28.1",
+    "ruff==0.14.14",
 ]
 
 [tool.uv]
@@ -27,3 +28,20 @@ constraint-dependencies = [
     "langsmith==0.8.5",
     "websockets==14.2",
 ]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+# The repository's supabase/ SQL folder is not the Python SDK package.
+known-third-party = ["supabase"]
+
+[tool.ruff.lint.per-file-ignores]
+# Direct CLI execution needs its backend path before importing app modules.
+"**/scripts/*.py" = ["E402"]
+# Optional database tooling is imported only after the disposable-DB gate.
+"**/tests/test_database_sql.py" = ["E402"]

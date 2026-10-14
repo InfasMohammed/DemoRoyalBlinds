@@ -2,13 +2,15 @@ import { expect, test } from '@playwright/test'
 
 test('shortage, substitution, evidence and human approval', async ({ page }) => {
   const errors: string[] = []
-  page.on('pageerror', error => errors.push(error.message))
+  page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/')
   await expect(page.getByText('Backend connected')).toBeVisible()
   await page.getByRole('button', { name: /The fabric shortfall/ }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: 'Analyze project' }).click()
-  await expect(page.getByRole('heading', { name: 'Resolve constraints before approval' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Resolve constraints before approval' }),
+  ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Review estimate' })).toBeDisabled()
   await expect(page.getByText('40.69 lm shortfall')).toBeVisible()
   await page.getByRole('tab', { name: 'Agent findings' }).click()
@@ -30,7 +32,11 @@ test('shortage, substitution, evidence and human approval', async ({ page }) => 
   await page.getByRole('button', { name: 'Approve demo estimate' }).click()
   await expect(page.getByRole('heading', { name: 'Work order & execution' })).toBeVisible()
   await page.getByRole('tab', { name: 'Overview', exact: true }).click()
-  await expect(page.getByText('Demo estimate approved by Interview reviewer. Post-approval actions are tracked in the Work order tab.')).toBeVisible()
+  await expect(
+    page.getByText(
+      'Demo estimate approved by Interview reviewer. Post-approval actions are tracked in the Work order tab.',
+    ),
+  ).toBeVisible()
   await page.getByRole('button', { name: /Project reports/ }).click()
   await expect(page.getByRole('cell', { name: 'Demo approved', exact: true }).first()).toBeVisible()
   expect(errors).toEqual([])
@@ -41,10 +47,14 @@ test('urgent deadline and mobile layout', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /The urgent fit-out/ }).click()
   await page.getByRole('button', { name: 'Analyze project' }).click()
-  await expect(page.getByRole('heading', { name: 'Resolve constraints before approval' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Resolve constraints before approval' }),
+  ).toBeVisible()
   await page.getByRole('tab', { name: 'Production & quality' }).click()
   await expect(page.getByText('Deadline at risk', { exact: true })).toBeVisible()
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  )
   expect(overflow).toBe(false)
 })
 

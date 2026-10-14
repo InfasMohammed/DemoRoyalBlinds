@@ -2,19 +2,31 @@ import { expect, test } from '@playwright/test'
 
 test('full portfolio, source retrieval and engineering evidence gap', async ({ page }) => {
   const errors: string[] = []
-  page.on('pageerror', error => errors.push(error.message))
+  page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/')
   await page.getByRole('button', { name: 'Product knowledge', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Product expertise, with evidence.' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Product expertise, with evidence.' }),
+  ).toBeVisible()
   await expect(page.locator('.knowledge-assistant select')).toHaveCount(0)
   await expect(page.locator('.portfolio-card')).toHaveCount(15)
   await page.getByRole('button', { name: 'External Shades', exact: true }).click()
   await expect(page.locator('.portfolio-card')).toHaveCount(7)
-  await expect(page.getByRole('heading', { name: 'Bioclimatic Pergolas', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Bioclimatic Pergolas', exact: true }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Outdoor product range' }).click()
   await expect(page.getByText('Catalog answer', { exact: true })).toBeVisible()
   await expect(page.locator('.answer-mode')).toContainText('Complete product catalog lookup')
-  for (const name of ['Car Parking Shades', 'Sail Shades', 'Bioclimatic Pergolas', 'Tensile Shade Structures', 'Awnings', 'Outdoor Furniture', 'Umbrellas']) {
+  for (const name of [
+    'Car Parking Shades',
+    'Sail Shades',
+    'Bioclimatic Pergolas',
+    'Tensile Shade Structures',
+    'Awnings',
+    'Outdoor Furniture',
+    'Umbrellas',
+  ]) {
     await expect(page.locator('.answer-body')).toContainText(`• ${name} [CATALOG-`)
   }
   await expect(page.locator('.knowledge-citations article')).toHaveCount(7)
@@ -24,15 +36,25 @@ test('full portfolio, source retrieval and engineering evidence gap', async ({ p
   await firstEvidence.getByText('Read catalog evidence', { exact: true }).click()
   await expect(firstEvidence.locator('p')).toContainText('not specifications or stock availability')
   await expect(page.getByRole('button', { name: 'Find an answer' })).toBeEnabled()
-  const pergola = page.locator('.portfolio-card').filter({ has: page.getByRole('heading', { name: 'Bioclimatic Pergolas', exact: true }) })
+  const pergola = page
+    .locator('.portfolio-card')
+    .filter({ has: page.getByRole('heading', { name: 'Bioclimatic Pergolas', exact: true }) })
   await pergola.getByRole('button', { name: 'Explore source evidence' }).click()
-  await expect(page.locator('.knowledge-answer .answer-question')).toContainText('Bioclimatic Pergolas')
+  await expect(page.locator('.knowledge-answer .answer-question')).toContainText(
+    'Bioclimatic Pergolas',
+  )
   await expect(page.getByRole('button', { name: 'Find an answer' })).toBeEnabled()
-  await page.getByLabel('Your product question').fill('Can motorized roller blinds use rechargeable battery or mains power?')
-  const request = page.waitForRequest(request => request.url().endsWith('/api/knowledge/ask') && request.method() === 'POST')
+  await page
+    .getByLabel('Your product question')
+    .fill('Can motorized roller blinds use rechargeable battery or mains power?')
+  const request = page.waitForRequest(
+    (request) => request.url().endsWith('/api/knowledge/ask') && request.method() === 'POST',
+  )
   await page.getByRole('button', { name: 'Find an answer' }).click()
   expect((await request).postDataJSON()).toEqual({
-    question: 'Can motorized roller blinds use rechargeable battery or mains power?', category: null, product_id: null,
+    question: 'Can motorized roller blinds use rechargeable battery or mains power?',
+    category: null,
+    product_id: null,
   })
   await expect(page.locator('.knowledge-answer')).toContainText('rechargeable battery')
   await expect(page.locator('.knowledge-citations')).toContainText('Roller blind power options')
@@ -43,16 +65,24 @@ test('full portfolio, source retrieval and engineering evidence gap', async ({ p
   await expect(page.getByText('Source excerpts', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Missing wind ratings' }).click()
   await expect(page.getByRole('heading', { name: 'More evidence required' })).toBeVisible()
-  await expect(page.locator('.answer-body')).toContainText('approved datasheet or live business record')
+  await expect(page.locator('.answer-body')).toContainText(
+    'approved datasheet or live business record',
+  )
   expect(errors).toEqual([])
 })
 
-test('supported product opens estimating form and unsupported products do not', async ({ page }) => {
+test('supported product opens estimating form and unsupported products do not', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Product knowledge', exact: true }).click()
-  const curtain = page.locator('.portfolio-card').filter({ has: page.getByRole('heading', { name: 'Curtains', exact: true }) })
+  const curtain = page
+    .locator('.portfolio-card')
+    .filter({ has: page.getByRole('heading', { name: 'Curtains', exact: true }) })
   await curtain.getByRole('button', { name: 'Prepare demo estimate' }).click()
-  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('curtain')
+  await expect(
+    page.getByRole('dialog').getByRole('combobox', { name: 'Product', exact: true }),
+  ).toHaveValue('curtain')
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByRole('button', { name: 'External Shades', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Prepare demo estimate' })).toHaveCount(0)

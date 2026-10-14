@@ -1,0 +1,70 @@
+.record-modal > p {
+  font-size: 12px;
+  line-height: 1.8;
+  margin-bottom: 18px;
+}
+.record-modal form > fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.record-modal .record-options {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 15px;
+  margin: 14px 0;
+}
+.record-options legend {
+  font-size: 11px;
+  padding: 0 6px;
+  color: #687c57;
+}
+.record-options .approval-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.record-modal label.record-confirm {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.6;
+}
+.record-confirm input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.record-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px 15px;
+  font-size: 12px;
+  line-height: 1.7;
+  background: #f4f8ee;
+  color: #3d6344;
+  margin-bottom: 20px;
+}
+.record-success > span {
+  flex: 1;
+}
+.record-success > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+@media (max-width: 760px) {
+  .record-options .approval-checks {
+    grid-template-columns: 1fr;
+  }
+  .record-modal .form-grid.three {
+    grid-template-columns: 1fr;
+  }
+  .record-modal .form-grid.three label {
+    font-size: 12px;
+  }
+}

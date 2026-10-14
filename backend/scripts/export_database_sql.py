@@ -1,16 +1,18 @@
 """Build repeatable, non-destructive database migrations from labeled seed data."""
+
 import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'backend'))
+sys.path.insert(0, str(ROOT / "backend"))
 from export_knowledge_sql import export_sql, literal
+
 from app.knowledge import DATA
 
 
 def operations_sql():
-    seed = json.loads((ROOT / 'backend/app/data/demo_operations.json').read_text())
+    seed = json.loads((ROOT / "backend/app/data/demo_operations.json").read_text())
     sql = """-- Operational business records. Initial values are synthetic interview seeds.
 -- Reruns preserve edited stock, rates, limits, settings and existing reports.
 begin;
@@ -78,23 +80,48 @@ begin
 end;
 $trigger$;
 """
-    for table in ('manufacturing_products', 'inventory_materials', 'manufacturing_settings', 'company_knowledge_settings'):
-        sql += f'drop trigger if exists business_record_updated on public.{table};\n'
-        sql += f'create trigger business_record_updated before update on public.{table} for each row execute function public.touch_business_record();\n'
-    for id, p in seed['products'].items():
-        fields = ['id', *p.keys(), 'quality_checklist']
-        values = [literal(id), *(literal(v) if isinstance(v, str) else str(v) for v in p.values()),
-                  'array[' + ','.join(literal(v) for v in seed['checklists'][id]) + ']::text[]']
+    for table in (
+        "manufacturing_products",
+        "inventory_materials",
+        "manufacturing_settings",
+        "company_knowledge_settings",
+    ):
+        sql += f"drop trigger if exists business_record_updated on public.{table};\n"
+        sql += f"create trigger business_record_updated before update on public.{table} for each row execute function public.touch_business_record();\n"
+    for id, p in seed["products"].items():
+        fields = ["id", *p.keys(), "quality_checklist"]
+        values = [
+            literal(id),
+            *(literal(v) if isinstance(v, str) else str(v) for v in p.values()),
+            "array[" + ",".join(literal(v) for v in seed["checklists"][id]) + "]::text[]",
+        ]
         sql += f"insert into public.manufacturing_products ({', '.join(fields)}) values ({', '.join(values)}) on conflict (id) do nothing;\n"
-    for f in seed['fabrics']:
-        values = [literal(v) if isinstance(v, str) else 'array[' + ','.join(literal(x) for x in v) + ']::text[]'
-                  if isinstance(v, list) else str(v) for v in f.values()]
+    for f in seed["fabrics"]:
+        values = [
+            literal(v)
+            if isinstance(v, str)
+            else "array[" + ",".join(literal(x) for x in v) + "]::text[]"
+            if isinstance(v, list)
+            else str(v)
+            for v in f.values()
+        ]
         sql += f"insert into public.inventory_materials ({', '.join(f)}) values ({', '.join(values)}) on conflict (id) do nothing;\n"
     sql += "insert into public.manufacturing_settings (id, policy, scenarios, provenance, is_sample) values ('default', "
-    sql += ', '.join([literal(json.dumps(seed['policy'])) + '::jsonb', literal(json.dumps(seed['scenarios'])) + '::jsonb', literal(seed['provenance']), 'true'])
-    sql += ') on conflict (id) do nothing;\n'
-    metadata = {key: value for key, value in DATA.items() if key not in ('products', 'documents')}
-    sql += "insert into public.company_knowledge_settings (id, metadata) values ('default', " + literal(json.dumps(metadata)) + '::jsonb) on conflict (id) do nothing;\n'
+    sql += ", ".join(
+        [
+            literal(json.dumps(seed["policy"])) + "::jsonb",
+            literal(json.dumps(seed["scenarios"])) + "::jsonb",
+            literal(seed["provenance"]),
+            "true",
+        ]
+    )
+    sql += ") on conflict (id) do nothing;\n"
+    metadata = {key: value for key, value in DATA.items() if key not in ("products", "documents")}
+    sql += (
+        "insert into public.company_knowledge_settings (id, metadata) values ('default', "
+        + literal(json.dumps(metadata))
+        + "::jsonb) on conflict (id) do nothing;\n"
+    )
     sql += """
 -- Each RPC uses one SQL statement, so readers get one consistent MVCC snapshot.
 create or replace function public.get_operations_snapshot()
@@ -122,19 +149,34 @@ grant execute on function public.get_operations_snapshot() to service_role;
 grant execute on function public.get_company_knowledge_snapshot() to service_role;
 commit;
 """
-    execution = (ROOT / 'supabase/post_approval.sql').read_text().replace('begin;', '', 1).rsplit('commit;', 1)[0]
-    return sql.rsplit('commit;', 1)[0] + '\n' + execution + '\ncommit;\n'
+    execution = (
+        (ROOT / "supabase/post_approval.sql")
+        .read_text()
+        .replace("begin;", "", 1)
+        .rsplit("commit;", 1)[0]
+    )
+    return sql.rsplit("commit;", 1)[0] + "\n" + execution + "\ncommit;\n"
 
 
 def combined_sql():
     # Combine into one transaction. A failure rolls back the whole migration.
-    knowledge = export_sql().split('commit;')[0].replace('begin;', '', 1)
-    operations = operations_sql().replace('begin;', '', 1).rsplit('commit;', 1)[0]
-    return '-- Full additive setup. Preserve existing reports and edited business records.\nbegin;\n' + (ROOT / 'supabase/schema.sql').read_text() + '\n' + knowledge + '\n' + operations + '\ncommit;\n'
+    knowledge = export_sql().split("commit;")[0].replace("begin;", "", 1)
+    operations = operations_sql().replace("begin;", "", 1).rsplit("commit;", 1)[0]
+    return (
+        "-- Full additive setup. Preserve existing reports and edited business records.\nbegin;\n"
+        + (ROOT / "supabase/schema.sql").read_text()
+        + "\n"
+        + knowledge
+        + "\n"
+        + operations
+        + "\ncommit;\n"
+    )
 
 
-if __name__ == '__main__':
-    (ROOT / 'supabase/knowledge_base.sql').write_text(export_sql())
-    (ROOT / 'supabase/operations.sql').write_text(operations_sql())
-    (ROOT / 'supabase/database_setup.sql').write_text(combined_sql())
-    print('Exported knowledge_base.sql, operations.sql and the complete database_setup.sql. Reruns preserve database edits.')
+if __name__ == "__main__":
+    (ROOT / "supabase/knowledge_base.sql").write_text(export_sql())
+    (ROOT / "supabase/operations.sql").write_text(operations_sql())
+    (ROOT / "supabase/database_setup.sql").write_text(combined_sql())
+    print(
+        "Exported knowledge_base.sql, operations.sql and the complete database_setup.sql. Reruns preserve database edits."
+    )

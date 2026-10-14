@@ -1,164 +1,69 @@
+"""Application composition, configuration checks, and lifecycle management."""
+
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parents[1] / '.env')
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .catalog import today
-from .business_data import BusinessDataUnavailable, load_operations, data_source
-from .models import ApprovalRequest, ProjectRequest, KnowledgeQuery, WorkOrderAction
-from .knowledge import answer_question, portfolio
+from .api import business, health, knowledge, projects
+from .business_data import BusinessDataUnavailable, data_source
+from .execution import ApprovalWorker
 from .llm import chat_info
+from .record_creation import CreationUnavailable
 from .store import ReportStore, StorageUnavailable
-from .workflow import llm_enabled, run_workflow
-from .execution import ApprovalWorker, run_post_approval
-from .record_creation import CreationUnavailable, RecordConflict, MaterialCreate, KnowledgeCreate, create_material, create_knowledge
 
-if os.getenv('DATA_MODE', 'demo') != 'demo':
-    raise RuntimeError('Only DATA_MODE=demo is supported. Connect verified business data in a separate production implementation.')
-if os.getenv('KNOWLEDGE_RETRIEVAL_MODE', 'local') not in ('local', 'supabase_vector'):
-    raise RuntimeError('KNOWLEDGE_RETRIEVAL_MODE must be local or supabase_vector.')
 
 @asynccontextmanager
-async def lifespan(app):
-    worker = ApprovalWorker(store)
-    enabled = os.getenv('POST_APPROVAL_WORKER_ENABLED', 'true').lower() == 'true'
+async def lifespan(application: FastAPI):
+    worker = ApprovalWorker(application.state.report_store)
+    enabled = os.getenv("POST_APPROVAL_WORKER_ENABLED", "true").lower() == "true"
     if enabled:
         worker.start()
-    yield
-    if enabled:
-        worker.stop()
+    try:
+        yield
+    finally:
+        if enabled:
+            worker.stop()
 
 
-app = FastAPI(title='Royal Blinds · Operations Studio', version='0.2.0', lifespan=lifespan,
-              description='Interview demonstration. Human-reviewed estimates and demo work orders.')
-app.add_middleware(CORSMiddleware, allow_origins=os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(','),
-                   allow_methods=['GET', 'POST'], allow_headers=['Content-Type'])
-store = ReportStore()
-data_source()
-chat_info()  # Validate endpoint/model settings at startup without making requests.
-
-
-@app.exception_handler(BusinessDataUnavailable)
-@app.exception_handler(StorageUnavailable)
-@app.exception_handler(CreationUnavailable)
 async def storage_error(request, exc):
-    return JSONResponse(status_code=503, content={'detail': str(exc)})
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
-@app.get('/api/health')
-def health():
-    business = load_operations()
-    return {'status': 'ok', 'storage_mode': store.mode,
-            'reasoning_mode': 'live_ai_configured' if llm_enabled() else 'rule_based_demo',
-            'data_mode': 'synthetic_demo' if business['is_sample'] else 'configured_records', 'today': today().isoformat(), 'chat_provider': chat_info(),
-            'business_data_source': business['data_source'], 'business_data_fetched_at': business['fetched_at']}
+def create_app() -> FastAPI:
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    if os.getenv("DATA_MODE", "demo") != "demo":
+        raise RuntimeError(
+            "Only DATA_MODE=demo is supported. Connect verified business data in a separate production implementation."
+        )
+    if os.getenv("KNOWLEDGE_RETRIEVAL_MODE", "local") not in ("local", "supabase_vector"):
+        raise RuntimeError("KNOWLEDGE_RETRIEVAL_MODE must be local or supabase_vector.")
+    data_source()
+    chat_info()
+    application = FastAPI(
+        title="Royal Blinds · Operations Studio",
+        version="0.2.0",
+        lifespan=lifespan,
+        description="Interview demonstration. Human-reviewed estimates and demo work orders.",
+    )
+    application.state.report_store = ReportStore()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv(
+            "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(","),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
+    for error_type in (BusinessDataUnavailable, StorageUnavailable, CreationUnavailable):
+        application.add_exception_handler(error_type, storage_error)
+    for routes in (health.router, business.router, knowledge.router, projects.router):
+        application.include_router(routes, prefix="/api")
+    return application
 
 
-@app.get('/api/catalog')
-def catalog():
-    return load_operations()
-
-
-@app.post('/api/materials', status_code=201)
-def add_material(request: MaterialCreate):
-    try:
-        return create_material(request)
-    except RecordConflict as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-
-
-@app.post('/api/knowledge/entries', status_code=201)
-def add_knowledge(request: KnowledgeCreate):
-    try:
-        return create_knowledge(request)
-    except RecordConflict as exc:
-        raise HTTPException(409, str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-
-
-@app.get('/api/knowledge/portfolio')
-def product_portfolio():
-    return portfolio()
-
-
-@app.post('/api/knowledge/ask')
-def knowledge_answer(request: KnowledgeQuery):
-    try:
-        return answer_question(request.question, request.category, request.product_id)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-
-
-@app.post('/api/projects/analyze', status_code=201)
-def analyze(request: ProjectRequest):
-    if request.due_date < today():
-        raise HTTPException(422, 'Requested completion date must be today or later.')
-    try:
-        report = run_workflow(request)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    store.save(report)
-    return report
-
-
-@app.get('/api/projects')
-def projects():
-    return store.list()
-
-
-@app.get('/api/projects/{report_id}')
-def project(report_id: str):
-    report = store.get(report_id)
-    if not report:
-        raise HTTPException(404, 'Project report not found.')
-    return report
-
-
-@app.post('/api/projects/{report_id}/approve')
-def approve(report_id: str, request: ApprovalRequest):
-    if not all([request.measurements_confirmed, request.specification_confirmed, request.commercial_terms_confirmed, request.execution_confirmed]):
-        raise HTTPException(422, 'All review confirmations and demo execution authorization are required.')
-    try:
-        report = store.approve(report_id, {**request.model_dump(), 'approved_at': datetime.now(timezone.utc).isoformat(),
-                                         'scope': 'Approve quotation, reserve demo material and create a demo work order.'})
-        if report:
-            report = run_post_approval(store, report_id)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    if not report:
-        raise HTTPException(404, 'Project report not found.')
-    return report
-
-
-@app.post('/api/projects/{report_id}/execute')
-def retry_execution(report_id: str):
-    try:
-        report = run_post_approval(store, report_id)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    if not report:
-        raise HTTPException(404, 'Project report not found.')
-    return report
-
-
-@app.post('/api/projects/{report_id}/work-order/actions')
-def work_order_action(report_id: str, request: WorkOrderAction):
-    try:
-        values = request.model_dump(mode='json')
-        report = store.advance(report_id, **values)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    if not report:
-        raise HTTPException(404, 'Project report not found.')
-    return report
+app = create_app()

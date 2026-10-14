@@ -1,14 +1,29 @@
 import { expect, test } from '@playwright/test'
 
 test('catalog identifiers and scenario fields come from the API', async ({ page }) => {
-  await page.route('**/api/catalog', async route => {
+  await page.route('**/api/catalog', async (route) => {
     const response = await route.fetch()
     const data = await response.json()
     data.data_source = 'supabase'
     data.products.custom_roller = { ...data.products.manual_roller, name: 'Database custom roller' }
-    data.fabrics.push({ ...data.fabrics[0], id: 'custom_material', name: 'Database custom textile', stock_lm: 250 })
-    data.scenarios = [{ ...data.scenarios[0], title: 'Database custom scenario',
-      request: { ...data.scenarios[0].request, product: 'custom_roller', fabric_id: 'custom_material', quantity: 12 } }]
+    data.fabrics.push({
+      ...data.fabrics[0],
+      id: 'custom_material',
+      name: 'Database custom textile',
+      stock_lm: 250,
+    })
+    data.scenarios = [
+      {
+        ...data.scenarios[0],
+        title: 'Database custom scenario',
+        request: {
+          ...data.scenarios[0].request,
+          product: 'custom_roller',
+          fabric_id: 'custom_material',
+          quantity: 12,
+        },
+      },
+    ]
     await route.fulfill({ response, json: data })
   })
   await page.goto('/')
@@ -20,7 +35,7 @@ test('catalog identifiers and scenario fields come from the API', async ({ page 
 })
 
 test('report displays returned waste margin and VAT percentages', async ({ page }) => {
-  await page.route('**/api/projects/analyze', async route => {
+  await page.route('**/api/projects/analyze', async (route) => {
     const response = await route.fetch()
     const report = await response.json()
     report.materials.waste_percent = 12

@@ -9,10 +9,12 @@ import '@fontsource/manrope/500.css'
 import '@fontsource/manrope/600.css'
 import '@fontsource/manrope/700.css'
 import '@fontsource/manrope/800.css'
-import './styles.css'
-import './knowledge.css'
-import './branding.css'
+import './styles/base.css'
+import './styles/knowledge.css'
+import './styles/branding.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><App /></React.StrictMode>,
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
 )

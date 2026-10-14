@@ -1,4 +1,5 @@
 """Rebuild the additive Supabase migration from the reviewed bundled corpus."""
+
 import json
 import sys
 from pathlib import Path
@@ -49,21 +50,32 @@ grant select, insert, update on public.company_products, public.company_knowledg
 
 """
     product_rows = []
-    for p in DATA['products']:
-        product_rows.append('(' + ', '.join([literal(p['id']), literal(p['name']), literal(p['category']),
-                                            literal(p['source_url']), literal(json.dumps(p['quote_products'])) + '::jsonb']) + ')')
-    sql += 'insert into public.company_products (id, name, category, source_url, quote_products) values\n'
-    sql += ',\n'.join(product_rows)
-    sql += '\non conflict (id) do nothing;\n\n'
+    for p in DATA["products"]:
+        product_rows.append(
+            "("
+            + ", ".join(
+                [
+                    literal(p["id"]),
+                    literal(p["name"]),
+                    literal(p["category"]),
+                    literal(p["source_url"]),
+                    literal(json.dumps(p["quote_products"])) + "::jsonb",
+                ]
+            )
+            + ")"
+        )
+    sql += "insert into public.company_products (id, name, category, source_url, quote_products) values\n"
+    sql += ",\n".join(product_rows)
+    sql += "\non conflict (id) do nothing;\n\n"
     chunk_rows = []
     for c in CHUNKS:
-        ids = 'array[' + ','.join(literal(i) for i in c['product_ids']) + ']::text[]'
-        values = [literal(c[key]) for key in ('id', 'document_id', 'title', 'heading', 'category')]
-        values += [ids] + [literal(c[key]) for key in ('content', 'source_url', 'source_kind')]
-        values += [literal(DATA['captured_on']) + '::date']
-        chunk_rows.append('(' + ', '.join(values) + ')')
-    sql += 'insert into public.company_knowledge_chunks (id, document_id, title, heading, category, product_ids, content, source_url, source_kind, captured_on) values\n'
-    sql += ',\n'.join(chunk_rows)
+        ids = "array[" + ",".join(literal(i) for i in c["product_ids"]) + "]::text[]"
+        values = [literal(c[key]) for key in ("id", "document_id", "title", "heading", "category")]
+        values += [ids] + [literal(c[key]) for key in ("content", "source_url", "source_kind")]
+        values += [literal(DATA["captured_on"]) + "::date"]
+        chunk_rows.append("(" + ", ".join(values) + ")")
+    sql += "insert into public.company_knowledge_chunks (id, document_id, title, heading, category, product_ids, content, source_url, source_kind, captured_on) values\n"
+    sql += ",\n".join(chunk_rows)
     sql += """
 on conflict (id) do nothing;
 
@@ -116,7 +128,9 @@ from public.company_knowledge_chunks group by category order by category;
     return sql
 
 
-if __name__ == '__main__':
-    output = Path(__file__).resolve().parents[2] / 'supabase' / 'knowledge_base.sql'
+if __name__ == "__main__":
+    output = Path(__file__).resolve().parents[2] / "supabase" / "knowledge_base.sql"
     output.write_text(export_sql())
-    print(f'Exported {len(DATA["products"])} products and {len(CHUNKS)} source passages to {output.name}.')
+    print(
+        f"Exported {len(DATA['products'])} products and {len(CHUNKS)} source passages to {output.name}."
+    )

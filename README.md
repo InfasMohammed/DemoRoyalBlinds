@@ -19,6 +19,34 @@ The initial company knowledge base contains website text and links supplied by t
 
 Node.js powers the React development and build workflow. Python owns the application API; a second Node API is unnecessary for this scope.
 
+## Code organization
+
+```text
+backend/app/
+  main.py              Application factory, configuration and worker lifecycle
+  api/                 Health, business, knowledge and project routers
+  clock.py             Dubai business date
+  workflow.py          Six manufacturing specialists and quotation graph
+  execution.py         Post-approval graph and queue worker
+  local_execution.py   Offline work-order transactions
+  business_data.py     Validated business and knowledge snapshots
+  knowledge.py         Retrieval, catalogue answers and citation grounding
+  llm.py               Provider adapters and response validation
+  record_creation.py   Validated, retry-safe material and knowledge creation
+  store.py             Supabase and local report persistence
+frontend/src/
+  App.tsx              Page and dialog composition
+  pages/               Home, project workspace, reports, materials and workflow
+  components/          Layout, forms, report sections and shared UI
+  features/            Product knowledge assistant and work-order execution
+  hooks/               Studio state transitions and modal focus handling
+  lib/                 Navigation, formatting, agent roster and intake defaults
+  styles/              Shared, branding, knowledge and form styles
+  types.ts             Shared API response contracts
+```
+
+API routers obtain the application's report store through a FastAPI dependency. Each app instance owns its store, and the approval worker is stopped on shutdown, including exceptional shutdown. Frontend pages render data and invoke actions; the studio hook owns loading, analysis, approval and report updates. SQL migrations and database seed exporters remain in `supabase/` and `backend/scripts/`.
+
 ## Start the project
 
 Prerequisites: uv, Python 3.12, Node.js 22+, and npm. uv manages the backend's environment and dependencies using `backend/pyproject.toml` and `backend/uv.lock`. The Bash helper scripts below are for Linux/macOS/WSL; native Windows CMD instructions follow. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
@@ -151,7 +179,9 @@ flowchart TD
     G --> H{Any blockers?}
     H -->|Yes| I[Revise specification or deadline and rerun]
     H -->|No| J[Human review]
-    J --> K[Record demo approval only]
+    J --> K[Record approval and queue demo execution]
+    K --> L[Recheck records, reserve material and book capacity]
+    L --> M[Create work order and record factory progress]
 ```
 
 | Specialist | Tool and evidence |
@@ -182,10 +212,14 @@ Dates are calculated using the current Dubai date, so calendar results vary with
 ```bash
 # Backend calculations, graph execution, API, persistence and approval enforcement
 cd /workspace/DemoRoyalBlinds/backend
+uv run --locked ruff check .
+uv run --locked ruff format --check .
 uv run --locked pytest -q
 
 # TypeScript and production frontend build
 cd /workspace/DemoRoyalBlinds/frontend
+npm run format:check
+npm run typecheck
 npm run build
 
 # Browser workflows; /usr/bin/chromium is available in this cloud machine
@@ -193,6 +227,8 @@ CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
 ```
 
 On another machine, install Playwright's Chromium with `npx playwright install chromium` and omit `CHROMIUM_PATH`. Browser tests start an isolated offline backend on 8010 and frontend on 5180, with a unique local report file for each run. Supabase/LLM environment values are overridden with blanks for those test services. No running app or Supabase inventory is used by browser approval tests.
+
+Ruff checks Python imports and unused declarations and formats backend code. Prettier formats frontend TypeScript, CSS and tests; TypeScript checks component contracts. To apply formatting, run `uv run --locked ruff format .` from `backend` and `npm run format` from `frontend`. These commands also work in Windows CMD. The root smoke-check script uses the backend Ruff configuration: `uv run --locked --project backend ruff check --config backend/pyproject.toml scripts/smoke.py`.
 
 ## API
 
@@ -213,7 +249,7 @@ The current estimating workflow supports motorized rollers, manual rollers and m
 
 This version is for a private interview demo. FastAPI has no user authentication: reviewer names are attestations, not verified identities. Supabase RLS protects direct browser database access, but does not authenticate the API. Before public deployment, add Supabase Auth, backend JWT validation, role checks, per-user/organization report access, rate limiting and an immutable audit log. Local JSON storage supports one backend process only; use Supabase for multiple processes. The reservation/booking workflow is bounded to sample data. Supplier commitments, verified operator roles and real factory integrations remain separate production work.
 
-Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Eleven integration checks run against a disposable PostgreSQL/pgvector database, including migration/RLS, preservation on rerun, vector invalidation, atomic approval, stock reservation races, capacity/deadline rollback, stale prices, cancellation and guarded production progress. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
+Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Integration checks run against a disposable PostgreSQL/pgvector database, including migration/RLS, preservation on rerun, vector invalidation, atomic approval, stock reservation races, capacity/deadline rollback, stale prices, cancellation and guarded production progress. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
 
 ## Product knowledge and RAG
 
