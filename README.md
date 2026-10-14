@@ -1,78 +1,96 @@
-# Royal Blinds · Operations Studio
+# Royal Blinds Operations Studio
 
-A multi-agent manufacturing project for an AI Engineer interview, tailored to Royal Blinds LLC. It combines discovery across Internal Shades, External Shades and Smart Solutions with a roller-blind/curtain estimating workflow: material calculations, AED estimates, capacity plans, inspection checks and human review.
+A manufacturing operations application that combines multi-agent quotation analysis, product knowledge, inventory checks, production planning and human-approved work orders. Built with Python, FastAPI, LangGraph, React and Supabase, it brings project requirements and their supporting evidence into one workspace.
 
-This is an **independent interview prototype**, not an official Royal Blinds system. The initial customer records, material stock, product limits, prices, lead times and capacity are synthetic seed values. Supabase-backed mode reads your editable database records; replace sample values with approved company records before treating them as business facts. The company background supplied in the interview brief is context, not proof of product certifications or verified business policies.
+The application is tailored to Royal Blinds' Internal Shades, External Shades and Smart Solutions portfolio. Product discovery covers the broader portfolio; the current quotation engine supports motorized roller blinds, manual roller blinds and manual-track curtains.
 
-The initial company knowledge base contains website text and links supplied by the user. In database mode the reviewed content is read from Supabase on each request. It is explicitly tagged `user_supplied_website_copy`; the pages were not independently fetched. Product titles establish portfolio membership. Technical page text, approved manuals and current model ratings have not been supplied.
+## Key capabilities
 
-## Stack
+- **Quotation analysis:** Validate dimensions and quantities, calculate material requirements, check stock, estimate costs in AED and assess delivery feasibility.
+- **Six specialist agents:** Coordinate specification, inventory, quality, quotation, production and final review through LangGraph.
+- **Knowledge assistant:** Answer company and product questions using current source records, optional category filters and visible citations.
+- **Material and knowledge management:** Add reviewed knowledge and materials directly to Supabase through validated forms.
+- **Human approval:** Require review confirmations before reserving materials, booking capacity and creating a work order.
+- **Execution tracking:** Record production, quality checks, installation, cancellation and activity history.
+- **Persistent reports:** Retain the business-data snapshot, calculations, agent evidence and approval associated with each quotation.
+- **Controlled access:** Support Supabase sign-in and confirmed, invited accounts for hosted deployments.
 
-| Technology | Role |
-|---|---|
-| Python / FastAPI | Validated REST API and deterministic manufacturing tools |
-| LangGraph | Six specialist nodes, shared typed state, parallel inventory and quality checks |
-| React / TypeScript | Dashboard, intake form, reports, evidence inspector, quotation and review |
-| Node.js / Vite | Frontend development server, build and browser tests |
-| Supabase | Business data, knowledge and report storage through the trusted backend; reviewer sign-in for the hosted demo |
-| OpenAI / NVIDIA chat APIs | Optional specialist summaries and retrieval-grounded answers; OpenAI embeddings for optional vector search |
+This is an independently developed application for evaluation. Initial stock, prices, lead times, capacity and customer records are sample data. Company knowledge is based on supplied website content and reviewed additions; marketing descriptions do not establish verified technical ratings. Operational execution currently remains restricted to sample records.
 
-Node.js powers the React development and build workflow. Python owns the application API; a second Node API is unnecessary for this scope.
+## Technology stack
 
-## Code organization
+| Technology                         | Responsibility                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| Python 3.12 / FastAPI              | REST API, validation, manufacturing calculations and persistence                              |
+| LangGraph                          | Specialist coordination and post-approval execution workflows                                 |
+| React / TypeScript                 | Project workspace, reports, material library and knowledge assistant                          |
+| Node.js / Vite                     | Frontend development, build and browser testing                                               |
+| Supabase                           | PostgreSQL business records, knowledge, reports, transactional work orders and authentication |
+| OpenAI / NVIDIA-compatible APIs    | Optional agent commentary and retrieval-grounded answers                                      |
+| Docker / Google Cloud Run / Vercel | Backend container and frontend hosting configuration                                          |
 
-```text
-backend/app/
-  main.py              Application factory, configuration and worker lifecycle
-  access.py            Verified Supabase sessions and invited reviewer access
-  api/                 Health, business, knowledge and project routers
-  clock.py             Dubai business date
-  workflow.py          Six manufacturing specialists and quotation graph
-  execution.py         Post-approval graph and queue worker
-  local_execution.py   Offline work-order transactions
-  business_data.py     Validated business and knowledge snapshots
-  knowledge.py         Retrieval, catalogue answers and citation grounding
-  company_knowledge.py Company-topic detection and current source fact lookup
-  llm.py               Provider adapters and response validation
-  record_creation.py   Validated, retry-safe material and knowledge creation
-  store.py             Supabase and local report persistence
-frontend/src/
-  App.tsx              Page and dialog composition
-  pages/               Home, project workspace, reports, materials and workflow
-  components/          Layout, forms, report sections and shared UI
-  features/            Product knowledge assistant and work-order execution
-  hooks/               Studio state transitions and modal focus handling
-  lib/                 Navigation, formatting, agent roster and intake defaults
-  styles/              Shared, branding, knowledge and form styles
-  types.ts             Shared API response contracts
-  auth/                Reviewer sign-in, session management and sign-out
+## Agent workflow
+
+```mermaid
+flowchart TD
+    Intake[Project requirements] --> Specification[Specification agent]
+    Specification --> Inventory[Inventory agent]
+    Specification --> Quality[Quality and installation agent]
+    Inventory --> Quotation[Quotation agent]
+    Quality --> Quotation
+    Quotation --> Production[Production agent]
+    Production --> Coordinator[Coordinator]
+    Coordinator --> Decision{Blockers resolved?}
+    Decision -->|No| Revision[Revise requirements or replenish stock]
+    Revision --> Intake
+    Decision -->|Yes| Review[Human review and approval]
+    Review --> Recheck[Recheck current data and reserve resources]
+    Recheck --> WorkOrder[Work order]
+    WorkOrder --> Progress[Production, quality and installation]
 ```
 
-API routers obtain the application's report store through a FastAPI dependency. Each app instance owns its store, and the approval worker is stopped on shutdown, including exceptional shutdown. Frontend pages render data and invoke actions; the studio hook owns loading, analysis, approval and report updates. SQL migrations and database seed exporters remain in `supabase/` and `backend/scripts/`.
+| Agent                    | Responsibility                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| Specification            | Validate the selected manufacturing profile, dimensions and project requirements              |
+| Inventory                | Calculate roll layout, cutting allowances, waste, available stock and compatible alternatives |
+| Quality and installation | Check product limits, material compatibility and inspection requirements                      |
+| Quotation                | Calculate material, hardware, motor and labour costs, margin, VAT and selling price           |
+| Production               | Assess supplier lead times, working dates, factory capacity and installation scheduling       |
+| Coordinator              | Consolidate findings, explain blockers and determine eligibility for human review             |
 
-## Start the project
+Inventory and quality checks run in parallel. Quotation waits for both findings before the remaining stages proceed. Python tools control quantities, pricing, dates and approval gates; optional language-model calls add commentary and recommendations. The trace identifies actual AI output and rule-based fallbacks.
 
-Prerequisites: uv, Python 3.12, Node.js 22+, and npm. uv manages the backend's environment and dependencies using `backend/pyproject.toml` and `backend/uv.lock`. The Bash helper scripts below are for Linux/macOS/WSL; native Windows CMD instructions follow. Use this checkout directly; cloud tasks already run in isolation and need no Git worktree.
+## Knowledge assistant and RAG
 
-```bash
-cd /workspace/DemoRoyalBlinds
-bash scripts/setup.sh
-bash scripts/start.sh
-```
+The assistant uses three answer paths:
 
-React runs on port **5173**, FastAPI on **8000**. FastAPI's interactive API documentation is at `/docs` on the backend. Keep the terminal running; Ctrl+C stops both services. The starter checks for occupied ports and fails rather than launching a duplicate instance.
+| Question type                                      | Answer path                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Product ranges                                     | Complete lookup of the current product catalog with citations                               |
+| Company ownership, contacts, locations and history | Direct lookup of answer-bearing sentences in current company-profile sources                |
+| Other product questions                            | Retrieve relevant passages, then generate a cited answer when a chat provider is configured |
 
-The complete app works immediately with a local JSON report store in `.runtime/reports.json`. Without an API key, the interface explicitly says **Rule-based demo**: LangGraph coordinates specialist rules and tools, but no LLM runs. Reports survive a service restart; processes do not. uv creates or reuses `backend/.venv`; no manual activation is required. Python is pinned to 3.12, the supported and tested runtime for this project.
+The optional category selector defaults to **All categories** and supports Company profile, Internal Shades, External Shades and Smart Solutions. Product browsing has its own independent filter.
+
+`KNOWLEDGE_RETRIEVAL_MODE=local` uses keyword ranking over the selected knowledge corpus. With a configured chat provider, these passages ground the generated answer. `supabase_vector` uses Supabase cosine search after embedding the knowledge records. Vector retrieval currently requires OpenAI embeddings; NVIDIA chat can use keyword retrieval without an embedding service.
+
+Generated citation IDs are checked against retrieved sources. Invalid responses and provider failures return labeled source excerpts. Citation validation establishes source references, rather than proving every generated claim. Missing technical specifications, current certifications, warranty terms or live operational facts are reported as evidence gaps.
+
+**Add knowledge** saves reviewed passages in `company_knowledge_chunks`; new records are immediately eligible for keyword retrieval. Text edits clear stale embeddings. Use Company profile for corporate facts and the relevant product category for product enquiries. **Add material** saves stock, costs, roll width, lead time and compatible profiles in `inventory_materials`. Both forms require Supabase mode, validate inputs and use stable request IDs for safe retries.
+
+## Getting started
+
+Requirements: **Python 3.12**, **uv**, **Node.js 22+** and **npm**. Clone the repository, then start the backend and frontend in separate terminals.
 
 ### Windows Command Prompt
 
-Install the uv manager once using your existing Python 3.12 installation:
+Install uv once:
 
 ```cmd
 py -3.12 -m pip install uv
 ```
 
-Using `py -3.12 -m uv` avoids needing uv's executable directory on Windows PATH. Stop any existing backend with Ctrl+C. From the repository root (the folder containing both `backend` and `frontend`), open the backend CMD window:
+From the repository root, start the backend:
 
 ```cmd
 cd backend
@@ -81,7 +99,7 @@ if not exist .env copy .env.example .env
 py -3.12 -m uv run --locked uvicorn app.main:app --reload --port 8000
 ```
 
-In a second CMD window, starting in the repository root:
+In a second terminal, from the repository root:
 
 ```cmd
 cd frontend
@@ -89,17 +107,48 @@ npm ci --include=dev
 npm run dev
 ```
 
-If your CMD prompt already ends in `DemoRoyalBlinds\backend`, skip `cd backend`. uv reuses a compatible `.venv` there and synchronizes its packages to the lockfile. Existing `.env` files and local reports are preserved. An old repository-root `.venv` is no longer used by the helper scripts; it need not be deleted. The dependency list includes `tzdata`, which supplies the `Asia/Dubai` time zone on Windows.
+If your terminal is already inside `backend` or `frontend`, omit the corresponding `cd` command. After pulling dependency changes, rerun `uv sync --locked` or `npm ci --include=dev` before restarting the affected service.
 
-On Linux/macOS/WSL, the equivalent backend commands are `cd backend`, `uv sync --locked`, and `uv run --locked uvicorn app.main:app --reload --port 8000`. Install uv using your platform's official installer or `python3 -m pip install uv` in a writable Python environment. The cloud machine already provides uv. `--locked` prevents setup from silently changing dependency versions.
+### Linux, macOS or WSL
 
-`pyproject.toml` is the canonical dependency definition; `uv.lock` records the resolved versions, platforms and artifact hashes. For dependency changes, use `uv add <package>` or edit the manifest and run `uv lock`, then sync and run tests. Keep the pip-compatible export current with `uv export --locked --no-emit-project --output-file requirements.lock.txt` from `backend`. `requirements.txt` delegates to that generated, hashed export; it is not a second dependency definition.
+From the repository root:
 
-## Enable real AI reasoning
+```bash
+bash scripts/setup.sh
+bash scripts/start.sh
+```
 
-Copy `backend/.env.example` to `backend/.env` without overwriting an existing configuration. Set `LLM_API_KEY` securely in that backend file or in your environment secret settings, and restart FastAPI. Do not commit keys or put them in React variables. The default endpoint is `https://api.openai.com/v1` with model `gpt-4.1-mini`.
+The setup script installs locked dependencies and builds the frontend. The start script runs both services and checks for occupied ports. Stop them with Ctrl+C.
 
-For the NVIDIA-hosted model from your NVIDIA Build example, use:
+| Service           | Local address              |
+| ----------------- | -------------------------- |
+| Application       | http://localhost:5173      |
+| Backend           | http://127.0.0.1:8000      |
+| API documentation | http://127.0.0.1:8000/docs |
+
+Without database credentials, the application uses bundled sample records and persists reports in `.runtime/reports.json`. Without a chat API key, specialist analysis uses deterministic tools and Q&A returns source-based answers. Local JSON persistence supports one backend process. API documentation is available in local development and hidden when authentication is enabled.
+
+## Configuration
+
+Backend settings belong in `backend/.env`; see [backend/.env.example](backend/.env.example) for the complete configuration. Keep credentials out of Git and frontend variables.
+
+| Variable                       | Purpose                                                                |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `BUSINESS_DATA_SOURCE`         | `auto`, explicit `supabase`, or offline `demo`                         |
+| `SUPABASE_URL`                 | Supabase project endpoint                                              |
+| `SUPABASE_SERVICE_ROLE_KEY`    | Backend server secret or legacy service-role key                       |
+| `LLM_API_KEY`                  | Chat-provider credential; blank enables rule-based operation           |
+| `LLM_BASE_URL` / `LLM_MODEL`   | Chat endpoint and model                                                |
+| `KNOWLEDGE_RETRIEVAL_MODE`     | `local` keyword retrieval or indexed `supabase_vector`                 |
+| `EMBEDDING_API_KEY`            | OpenAI credential for optional vector embeddings                       |
+| `QA_CHAT_TIMEOUT_SECONDS`      | Q&A provider I/O timeout; default 30 seconds, one attempt              |
+| `DATA_MODE`                    | `demo`, required by the current application                            |
+| `POST_APPROVAL_WORKER_ENABLED` | Background recovery of queued approval jobs                            |
+| `APP_ENV` / `AUTH_REQUIRED`    | Environment and API authentication; production requires authentication |
+| `AUTH_ALLOWED_EMAILS`          | Confirmed Supabase accounts permitted to access the shared workspace   |
+| `CORS_ORIGINS`                 | Allowed frontend origins                                               |
+
+For NVIDIA-hosted chat:
 
 ```dotenv
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
@@ -108,254 +157,160 @@ LLM_API_KEY=
 KNOWLEDGE_RETRIEVAL_MODE=local
 ```
 
-Enter your NVIDIA API key in `LLM_API_KEY` privately. An existing `NVIDIA_API_KEY` environment variable is also supported when the NVIDIA endpoint is selected and `LLM_API_KEY` is blank. The sample string `"$NVIDIA_API_KEY"` is a placeholder; Python does not expand it. In standalone Python code use `os.environ["NVIDIA_API_KEY"]` instead. Allow `integrate.api.nvidia.com` in a restricted cloud network policy. Hosted access, credits and rate limits depend on your NVIDIA account; this configuration does not guarantee unlimited free use.
+Enter the key privately and restart the backend. The adapter collects complete streamed responses, validates final answers and discards reasoning text. OpenAI chat uses its structured-response adapter. Provider key configuration alone does not verify a successful AI request. Selected providers receive the submitted context; use sample data during evaluation.
 
-The NVIDIA adapter uses streaming chat completions (`stream=True`), matching the NVIDIA Build example. It collects only final-answer content, asks for JSON and validates the completed answer with Pydantic. Reasoning-only and empty chunks are ignored; a `stop` finish marker is required before the answer can be accepted. It does not assume NVIDIA supports OpenAI's strict JSON-schema API feature. The provider's separate `reasoning_content` is neither displayed nor saved. Invalid, interrupted or incomplete output falls back to labeled tool summaries or source excerpts; partial model text is discarded. OpenAI retains its native structured-response adapter. `/api/health` reports the selected provider/model, transport mode and whether a key is configured, without returning credentials. The frontend still receives one completed, validated answer rather than raw token or reasoning events.
+Frontend settings are documented in [frontend/.env.example](frontend/.env.example). Local development uses Vite's API proxy. Hosted builds use `VITE_API_BASE_URL`, `VITE_REQUIRE_AUTH=true`, the Supabase URL and a browser-safe publishable or legacy anon key. Server keys must remain in the backend.
 
-Q&A makes one chat attempt with a default provider I/O timeout of 30 seconds and no automatic retries. Streaming collection also checks elapsed time between chunks so reasoning/keepalive events cannot extend collection indefinitely; a pending network read is still subject to its I/O timeout. A timeout or other provider failure returns the retrieved source excerpts with a clear warning. Set `QA_CHAT_TIMEOUT_SECONDS=60` in `backend/.env` and restart the backend if you prefer waiting longer for the provider (valid range: 5–120). This setting covers the chat call, not database reads, vector retrieval or a strict end-to-end deadline. It does not speed up the hosted model. Manufacturing-agent narrative calls retain their existing provider timeouts and retry behavior.
+## Supabase setup
 
-If timeouts continue, run `uv run --locked --project backend python backend/scripts/check_chat.py --timeout 60` from the repository root. This sends one tiny synthetic request directly to the configured provider, uses no Supabase or RAG context, and prints no API key, response text or reasoning. It may use your provider credits. A timeout here isolates the symptom from retrieval; a pass verifies basic chat connectivity, not full Q&A. Compare with `curl -s http://127.0.0.1:8000/api/health` to confirm that your running backend uses the expected model and timeout. A script timeout override does not change the running backend's settings.
+1. Run [supabase/database_setup.sql](supabase/database_setup.sql) in the project's SQL editor. It creates the operational, knowledge and post-approval schema with initial sample records. Rerunning preserves existing record edits and reports.
+2. Configure the backend:
 
-The connection check defaults to streaming for NVIDIA, using the same collector as the application. Add `--no-stream` to compare with the previous request mode. From inside the `backend` folder use `uv run --locked python scripts/check_chat.py --timeout 60`. The transport change is tested with simulated provider streams; compare the direct checks on your machine to establish whether it resolves your live timeout.
+   ```dotenv
+   SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=
+   BUSINESS_DATA_SOURCE=supabase
+   KNOWLEDGE_RETRIEVAL_MODE=local
+   DATA_MODE=demo
+   ```
 
-For a full grounded Q&A check, run `uv run --locked python scripts/check_chat.py --rag --timeout 60` from `backend`. It reads the current knowledge corpus and asks the smartphone/battery question through the same logic as the API. It reports retrieval source, generation mode and safe validation reasons, without printing generated text, reasoning or credentials. It changes no business records. This timeout override applies only to the check, not the running backend.
+3. Enter a server secret (`sb_secret_...`) or legacy service-role key privately, then restart FastAPI. Publishable and anon keys cannot access the backend business tables.
+4. From the repository root, verify read access:
 
-With a key, all six nodes call the model with their calculated facts and record structured summaries and recommendations. Prices, dates and approval decisions still come from Python calculations. A provider failure is visibly labeled `rules_fallback`, not treated as successful AI execution. Key presence is only configuration evidence; confirm actual `llm` findings in the agent trace.
+   ```bash
+   uv run --locked --project backend python backend/scripts/check_database.py
+   ```
 
-The selected provider receives the submitted brief and relevant project facts. This prototype should use synthetic data. It does not enable external tracing automatically.
+   On Windows CMD, substitute `py -3.12 -m uv` for `uv`.
 
-## Connect all business data to Supabase
+| Records                                                  | Tables                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Materials, manufacturing profiles and operational policy | `inventory_materials`, `manufacturing_products`, `manufacturing_settings`      |
+| Product portfolio, passages and knowledge metadata       | `company_products`, `company_knowledge_chunks`, `company_knowledge_settings`   |
+| Quotations, evidence and approvals                       | `demo_reports`                                                                 |
+| Execution queue, work orders and resources               | `approval_jobs`, `work_orders`, `material_reservations`, `production_bookings` |
+| Tasks and activity history                               | `work_order_tasks`, `project_events`                                           |
 
-1. Use your dedicated `rbdemo` project (`neeupsyqguamtfmpanmp`).
-2. Run [supabase/database_setup.sql](supabase/database_setup.sql) in its SQL editor. This complete, additive migration creates operational tables, seeds initial records, prepares the knowledge/vector tables and preserves existing project reports. Rerunning it preserves database edits to stock, rates, settings and source text. It replaces the need to run the separate schema/knowledge/operations files for a fresh setup; `demo_setup.sql` remains available only if you want the older seeded report examples.
-3. Set the following in `backend/.env`, preserving existing NVIDIA settings:
+Each analysis captures current operational and knowledge snapshots. Historical reports retain their original data; stock and policy edits apply to new analyses. Configured database failures are reported explicitly rather than replaced with bundled stock. Business tables use RLS and backend-only access.
 
-```dotenv
-SUPABASE_URL=https://neeupsyqguamtfmpanmp.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=
-BUSINESS_DATA_SOURCE=supabase
-KNOWLEDGE_RETRIEVAL_MODE=local
-DATA_MODE=demo
-```
+For an existing installation without the execution schema, apply [supabase/post_approval.sql](supabase/post_approval.sql). The complete setup migration already includes it. [supabase/demo_setup.sql](supabase/demo_setup.sql) is optional and supplies legacy example reports.
 
-Enter a backend server key privately in `SUPABASE_SERVICE_ROLE_KEY`: a current `sb_secret_...` or legacy `service_role` key. A publishable/anon key cannot read these tables. Do not put server keys in `.env.example`, Git or React variables. `DATA_MODE=demo` identifies this interview application; it does not select the business data source.
+### Optional vector indexing
 
-4. Restart the backend using the uv command above. From native Windows CMD in the repository root, verify read access without changing data:
-
-```cmd
-py -3.12 -m uv run --locked --project backend python backend/scripts/check_database.py
-```
-
-5. Confirm `/api/health` reports `business_data_source=supabase`; analyze a new project and inspect its agent findings and `data_snapshot`. Fresh analysis, rather than an old saved report, exercises the current data. Confirm it is saved in `public.demo_reports` and remains readable after a restart.
-
-| Database table | Business data controlled here |
-|---|---|
-| `inventory_materials` | Material IDs, stock in linear metres, roll width, material cost, supplier lead time and product compatibility |
-| `manufacturing_products` | Estimating model, product limits, hardware/motor prices, labour hours, cutting allowances, curtain fullness and inspection checklist |
-| `manufacturing_settings` | Labour rates, margin, VAT, waste, factory/installation capacity, queue, inspection duration, working weekdays, holidays, exclusions and scenario presets |
-| `company_products` | Full portfolio, categories, source URLs and links to available manufacturing profiles |
-| `company_knowledge_chunks` | Editable source passages and optional vectors; text changes clear stale embeddings automatically |
-| `company_knowledge_settings` | Category descriptions, source provenance and evidence limitations |
-| `demo_reports` | Complete project reports, agent evidence, business snapshots and review records |
-
-Each analysis reads one operational SQL snapshot plus one knowledge SQL snapshot and shares them across all six agents. No process-wide catalog cache is used. Stock, prices or settings changed after analysis apply to the next analysis; historical reports retain their captured values. Operational and knowledge snapshots are separate reads. Analysis makes no resource changes. A new human approval with execution authorization starts the post-approval workflow described below: atomic material reservation, capacity booking and work-order creation. Manufacturing completion consumes reserved sample material. No purchase orders, machine commands or external messages are sent.
-
-`BUSINESS_DATA_SOURCE=auto` selects Supabase when both backend variables are set and otherwise selects offline demo fixtures. `supabase` requires database configuration and fails explicitly if it cannot read valid records. `demo` explicitly uses bundled fixtures in `backend/app/data` for offline testing. Database failures never silently fall back to sample stock or local knowledge. Optional vector-search failure can fall back to keyword search over the **same current database corpus**. Keyword retrieval from Supabase needs no embedding key and still supports NVIDIA-generated RAG answers.
-
-All database tables use RLS without anonymous browser access; snapshot RPCs run with the caller's privileges and are executable only by `service_role`. Local development defaults to credential-free access; the hosted private demo requires Supabase sign-in and an invited email. The initial migration is labeled sample data (`manufacturing_settings.is_sample=true`); database storage alone does not make those values verified company facts. After reviewing/replacing records, update the provenance and sample flag appropriately.
-
-**Editable-stock demonstration:** In the Supabase table editor, change `inventory_materials.stock_lm` for `linen_blackout` from 28 to 100. Refresh the Material library and analyze the 24-blind shortage scenario again. Under the unchanged seed rules, the 68.69 lm requirement is now covered and the material blocker disappears. Change the value back after the demonstration. Changes do not retroactively rewrite old reports.
-
-You can add material IDs and manufacturing profiles without changing Python/React enums. Profiles must use a supported `roller` or `curtain` calculation model, reference an existing knowledge product and include a checklist. New engineering models for awnings, pergolas and tensile structures require their own approved formulas and costing inputs; this migration does not invent them.
-
-## Six specialists
-
-```mermaid
-flowchart TD
-    A[Validated project intake] --> B[Specification agent]
-    B --> C[Inventory agent]
-    B --> D[Quality and installation agent]
-    C --> E[Quotation agent]
-    D --> E
-    E --> F[Production agent]
-    F --> G[Coordinator]
-    G --> H{Any blockers?}
-    H -->|Yes| I[Revise specification or deadline and rerun]
-    H -->|No| J[Human review]
-    J --> K[Record approval and queue demo execution]
-    K --> L[Recheck records, reserve material and book capacity]
-    L --> M[Create work order and record factory progress]
-```
-
-| Specialist | Tool and evidence |
-|---|---|
-| Specification | Product catalog, structured dimensions and quantity; brief is context only |
-| Inventory | Roll layout, whole-panel yield, allowances, 8% waste, stock and alternative fabrics |
-| Quality & installation | Product limits, fabric compatibility and survey/installation checklist |
-| Quotation | Itemized direct cost, 30% gross margin and illustrative 5% VAT |
-| Production | Supplier lead time, factory queue, working-day capacity and installation sequence |
-| Coordinator | Deterministic blockers, next steps and approval gate |
-
-This is a constrained specialist workflow, rather than an autonomous open-ended agent conversation. Parallel inventory and quality nodes write separate state fields; a reducer merges their evidence traces. The quotation waits for both findings. Every node has a specialized role, a tool calculation and optional model reasoning. There is no fabricated conversational history or simulated agent progress.
-
-## Five-minute interview demonstration
-
-1. Open **The fabric shortfall**. Use the default 24 motorized rollers, each 1.8 × 2.4 m, with linen-look blackout fabric. Analyze the project.
-2. Explain the inventory result: one panel fits the 3.2 m roll width; `24 × 2.65 × 1.08 = 68.69 lm`. With 28 lm available, the shortage is **40.69 lm**. Approval is disabled.
-3. Inspect the **Agent findings** and expand inventory evidence. Explain the record IDs, formulas and difference between rules and live AI.
-4. Click **Use & re-analyze** for performance blackout. The new report uses 120 lm demo stock and recomputes the price and plan. With the default flexible deadline it becomes eligible for human review.
-5. Open **Quotation**: direct cost **AED 13,602.85**, selling subtotal **AED 19,432.64**, VAT **AED 971.63**, total **AED 20,404.27**. Gross margin is `cost ÷ (1 − 0.30)`, not a 30% markup.
-6. Review **Production & quality**, then approve the demo estimate with the three review confirmations plus explicit demo execution authorization. The Work order tab shows the reservation, booked dates, tasks and activity log. Continue through production, quality and installation using the progress controls.
-7. Start **The urgent fit-out**. The five-day deadline fails even if you select an available fabric. Show how the coordinator prevents an unrealistic promise.
-
-Dates are calculated using the current Dubai date, so calendar results vary with the demo day. Monday–Friday working days, a two-day queue, six productive hours/day, and supplier lead times are explicit assumptions. Public holidays and live bookings are not included.
-
-## Validation
+Configure an OpenAI embedding key, then run from the repository root:
 
 ```bash
-# Backend calculations, graph execution, API, persistence and approval enforcement
-cd /workspace/DemoRoyalBlinds/backend
-uv run --locked ruff check .
-uv run --locked ruff format --check .
-uv run --locked pytest -q
-
-# TypeScript and production frontend build
-cd /workspace/DemoRoyalBlinds/frontend
-npm run format:check
-npm run typecheck
-npm run build
-
-# Browser workflows; /usr/bin/chromium is available in this cloud machine
-CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
-# Sign-in, session persistence and authenticated API routing with mocked Auth
-CHROMIUM_PATH=/usr/bin/chromium npm run test:auth
-```
-
-On another machine, install Playwright's Chromium with `npx playwright install chromium` and omit `CHROMIUM_PATH`. Browser tests start an isolated offline backend on 8010 and frontend on 5180, with a unique local report file for each run. Supabase/LLM environment values are overridden with blanks for those test services. No running app or Supabase inventory is used by browser approval tests.
-
-Ruff checks Python imports and unused declarations and formats backend code. Prettier formats frontend TypeScript, CSS and tests; TypeScript checks component contracts. To apply formatting, run `uv run --locked ruff format .` from `backend` and `npm run format` from `frontend`. These commands also work in Windows CMD. The root smoke-check script uses the backend Ruff configuration: `uv run --locked --project backend ruff check --config backend/pyproject.toml scripts/smoke.py`.
-
-## API
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/health` | Runtime mode and Dubai date |
-| GET | `/api/catalog` | Demo materials and products |
-| POST | `/api/projects/analyze` | Run the graph and persist the resulting report |
-| GET | `/api/projects` | Latest 50 reports |
-| GET | `/api/projects/{id}` | One report and its evidence |
-| POST | `/api/projects/{id}/approve` | Require review/execution consent, atomically queue actions, safely return an existing approval on retry |
-| POST | `/api/projects/{id}/execute` | Retry a queued or blocked post-approval job without duplicating effects |
-| POST | `/api/projects/{id}/work-order/actions` | Record manufacturing, quality, installation or cancellation progress |
-
-## Scope and next steps
-
-The current estimating workflow supports motorized rollers, manual rollers and manual-track curtains with one uniform opening size per project. Product discovery covers the supplied internal, external and smart portfolio. Tensile structures, retractable roofs, awnings and canopies require different engineering and costing models and are not supported by the estimating tools. Add mixed opening schedules, supplier-backed lead times and verified product ratings before expanding estimation scope.
-
-This version is for a private interview demo. `AUTH_REQUIRED=true` enables Supabase-verified user tokens and an `AUTH_ALLOWED_EMAILS` list of confirmed invited accounts. All API routes are protected; production startup requires authentication. Invited accounts have equal access to shared demo data. New approvals record the verified user ID/email, and progress uses the verified email as actor. Local development defaults to `AUTH_REQUIRED=false`. A real business rollout still needs per-role permissions, per-user/organization data access, rate controls and broader audit requirements. Local JSON storage supports one backend process only; hosted mode uses Supabase. Reservation/progress actions remain bounded to sample data; real factory integrations are separate work.
-
-## Deployment
-
-Follow [deploy/README.md](deploy/README.md) for Vercel, Google Cloud Run and the existing Supabase project. It includes reviewer accounts, Secret Manager configuration, a Cloud Shell deployment script, frontend environment variables and signed-in smoke checks. The Docker image runs as a non-root user, uses locked dependencies and listens on Cloud Run's `PORT`. Vercel API requests use `VITE_API_BASE_URL` directly; server keys never enter the frontend build. Upload exclusions keep local credentials and logs out of the image and Cloud Build source.
-
-Cloud Run uses request-based CPU with the background worker disabled, zero minimum instances, at most two instances and a 600-second request timeout. Approval and explicit Retry execution still run within requests. Quotation generation remains synchronous; hosting does not by itself fix a stalled browser response. Free allowances are usage-dependent and billing must be enabled; budget alerts are not spending caps.
-
-Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Integration checks run against a disposable PostgreSQL/pgvector database, including migration/RLS, preservation on rerun, vector invalidation, atomic approval, stock reservation races, capacity/deadline rollback, stale prices, cancellation and guarded production progress. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
-
-## Product knowledge and RAG
-
-The page header follows the current task: **New quotation** in Project studio, **Add knowledge** in Product knowledge, and **Add material** in Material library. Project reports and Agent workflow have no creation button. Adding knowledge or materials requires Supabase business data; offline fixtures are never modified by these forms.
-
-**Add knowledge** saves reviewed title/section text, category, source URL and optional related products in `company_knowledge_chunks`, tagged `user_added_content`. New entries appear in the source register and are immediately eligible for keyword retrieval. Embeddings are not invented or generated during a save; run the existing indexing script before using new passages in vector search. **Add material** saves SKU, roll width, opening on-hand stock, recorded cost, supplier lead time, finish, colour, source and compatible manufacturing profiles in `inventory_materials`. The library reloads after saving and future quotations use the new record. Existing reports keep their original snapshots.
-
-The backend validates required fields, numeric values and product references before insertion. A stable request ID makes retrying the same form safe after a lost response; conflicting IDs/SKUs never overwrite existing records. New endpoints are `POST /api/knowledge/entries` and `POST /api/materials`; the existing database schema already supports them, so this change needs no new SQL migration. Server credentials stay in the backend.
-
-Open **Product knowledge** in the dashboard. The supplied portfolio has eight internal product types (roller, Venetian, wooden, vertical, Roman, zebra roller, curtains and cubicle curtains) and seven external types (car parking shades, sail shades, bioclimatic pergolas, tensile shade structures, awnings, outdoor furniture and umbrellas). Smart Solutions is an automation/control layer across applicable products; universal compatibility is not assumed.
-
-Ask questions directly in the assistant. The optional **Category** selector defaults to **All categories** and can narrow a question to Company profile, Internal Shades, External Shades or Smart Solutions. Portfolio category buttons affect browsing independently. Product cards open a focused source enquiry; example/card actions clear the optional Q&A filter, and their product ID is not retained for subsequent typed questions. A manually selected Q&A category stays active until changed or cleared.
-
-Basic company questions recognize ownership, contacts, email/telephone, locations, founding date and history. They select answer-bearing sentences from the current company-profile passages and show exact cited text, labeled **Company facts / Company profile lookup**. This is a deterministic source lookup, independent of the model and vector index. Values and source IDs come from the current database snapshot; there are no hardcoded owners, addresses or contact values. Product drafts/enquiries cannot replace company facts even when misfiled in the company category. If the selected category excludes company sources, the answer asks you to choose All categories or Company profile. Missing ownership/founder information is reported as missing; an owner is never inferred to be a founder.
-
-When adding company facts, use Company profile with an informative title/heading such as Company ownership, Contact details or Office locations. Put product enquiries such as indoor wood decoration under Internal Shades. This change reads existing records and requires no SQL migration or reindexing for company facts.
-
-The source register links company, internal, external and smart content to its supplied URLs and section headings. Individual linked product titles are included as listing evidence only. Original seed evidence is in [backend/app/data/company_knowledge.json](backend/app/data/company_knowledge.json). Database mode reads current passages and metadata from Supabase; offline mode uses this seed corpus. `backend/app/knowledge.py` ranks the selected corpus.
-
-Try these enquiries:
-
-- `What outdoor shade products does Royal Blinds offer?`
-- `Can motorized roller blinds use smartphone control and a rechargeable battery?`
-- `What is the maximum wind speed rating for awnings?`
-
-The third enquiry deliberately flags an evidence gap. Marketing copy cannot confirm wind ratings, motor voltage/torque, device compatibility, valid certifications, current prices, stock or warranty terms. Product estimation buttons are offered only for the existing roller-blind and curtain models. Other product types support discovery and technical enquiry, not fabricated estimates.
-
-Retrieval and generation are separate:
-
-Product-range questions (for example, “What outdoor shade products are listed?”) use a complete lookup of the current `company_products` catalog in Supabase mode, or the seed catalog offline. They return a concise list with citations to product records, labeled **Catalog answer**. This deterministic lookup is distinct from LLM RAG and avoids omitting products because passage retrieval has a top-k limit. Broad company-offering questions include both product ranges and the Smart Solutions area description. Catalog evidence establishes membership only; technical and live-data questions still require appropriate records.
-
-Basic company facts use the separate source-sentence lookup described above. The following retrieval/generation modes apply to remaining questions; technical/live-data evidence gates and generated-answer citation validation remain in place.
-
-| Configuration | Actual behavior |
-|---|---|
-| `KNOWLEDGE_RETRIEVAL_MODE=local`, no LLM key | BM25-style keyword retrieval and up to three relevant original sentences; no generated AI answer |
-| Local retrieval with `LLM_API_KEY` | RAG: retrieved passages feed a structured model answer with validated source IDs |
-| `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` after indexing | 1536-dimensional OpenAI embeddings and Supabase cosine search, with category/product filters |
-
-Generated answers are instructed to answer directly, usually within 150 words, without repeating full passages. Declared citation IDs must match inline citation IDs and retrieved sources; this validates references, not every factual claim. Full source passages remain available in expandable details. Keyword search treats indoor/internal and outdoor/external as equivalents.
-
-NVIDIA and compatible-provider Q&A ask for plain final-answer text with exact inline source IDs. The backend derives the used-source list from those citations and validates it against retrieved passages, avoiding a redundant model-generated JSON citation list. The previous JSON Q&A form is also accepted when valid. OpenAI uses its native structured answer adapter. Missing citations, unsupported source IDs and invalid JSON/structure produce distinct safe warnings and a source-excerpt fallback. Manufacturing narrative responses still use their structured schemas.
-
-Vector failure or an unindexed corpus visibly falls back to local retrieval. Model failure or invalid citations visibly falls back to concise original source excerpts, with a visible reason. Scores express retrieval relevance, never factual confidence. Database vector matches are accepted only when IDs and content match the current knowledge snapshot; stale matches cannot replace its source text or citation links. The specification and quality agents use this same retrieval tool and persist their passages as report evidence; prices and scheduling calculations remain controlled by Python.
-
-The complete `database_setup.sql` already prepares knowledge storage. The standalone [supabase/knowledge_base.sql](supabase/knowledge_base.sql) creates knowledge tables only; it also needs `operations.sql` for metadata and snapshot RPCs before this backend can use database mode. **This is a separate migration from `demo_setup.sql`.** It adds `company_products`, `company_knowledge_chunks` and the `match_company_knowledge` RPC, preserving existing records and embeddings on repeat runs. Editing passage text in the database clears its old embedding through a trigger. It neither changes existing project reports nor enables anonymous access. All access stays on the backend service role.
-
-SQL seeds the source text without overwriting edited records; it does not generate embeddings. For NVIDIA chat, keep local retrieval to use RAG without an embedding API. Optional vector indexing currently uses OpenAI's `text-embedding-3-small`, so it requires a separate OpenAI key in `EMBEDDING_API_KEY`. The NVIDIA chat key is never sent to OpenAI. Existing OpenAI chat deployments may reuse their `LLM_API_KEY` when `EMBEDDING_API_KEY` is blank.
-
-Once `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the embedding key are securely configured, run:
-
-```bash
-cd /workspace/DemoRoyalBlinds
 uv run --locked --project backend python backend/scripts/index_knowledge.py
 ```
 
-The script reads the current database corpus, skips already indexed passages, generates `text-embedding-3-small` embeddings, writes them with a content predicate, and verifies a self-match through the RPC. It makes paid embedding requests to the provider. Only after it succeeds, set `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` on the backend and restart. Confirm an actual response reports `retrieval_mode=supabase_vector`; configuration alone is not verification.
+The script indexes current passages with `text-embedding-3-small` and verifies a self-match through the search RPC. Embedding requests may incur provider charges. After successful indexing, set `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` and restart. Unavailable vector retrieval falls back visibly to keyword search over the same current corpus. A NVIDIA chat key is never reused for OpenAI embeddings.
 
-The knowledge API is `GET /api/knowledge/portfolio` and `POST /api/knowledge/ask`. The latter accepts `question`, optional `category` (`internal`, `external`, `smart`, `company`) and optional `product_id` from the portfolio. It returns answer mode, actual retrieval mode, source passages, provenance and review requirements.
+## Approval and execution
 
-In Supabase mode, edit reviewed source records in the database. Bundled JSON files are offline fixtures and migration seeds. To update those seed files and rebuild the knowledge-only migration, use `uv run --locked --project backend python backend/scripts/export_knowledge_sql.py`. Review the generated migration before applying it. Approved product datasheets and manuals should become a separately identified source class before adding engineering-dependent decisions; the current corpus contains marketing context only.
+Approval requires the review confirmations and explicit authorization to reserve sample material and create a work order. The API records approval with a durable queued job. A second LangGraph workflow prepares execution handoffs, then a transactional tool rechecks quote terms, stock, capacity and deadlines before committing resources.
 
-On Windows, substitute `py -3.12 -m uv` for `uv` in the validation and knowledge-indexing commands above.
+Material reservations reduce available stock while preserving on-hand stock. Manufacturing completion consumes the reservation exactly once. Concurrent approvals use database locks, and retries cannot duplicate reservations, bookings or work orders.
 
-## Database development checks
+The operator records progress through **Ready for production → In production → Awaiting quality checks → Ready for installation → Completed**. Quality approval requires the current checklist. Cancellation before production releases reserved material and capacity; completed manufacturing retains consumed-material history.
 
-Regular `uv run --locked pytest -q` uses explicit offline fixtures and mocked Supabase responses. The optional `tests/test_database_sql.py` runs only when `DATABASE_TEST_URL` points to an empty **disposable** PostgreSQL database with pgvector available and administrator permissions. It creates Supabase-like roles/schema and synthetic data. Never point it at rbdemo or a production database. Install `psycopg[binary]` in a separate test tooling environment to run it; this is not an application dependency. A skipped SQL integration module is not evidence of a successful live database test.
+If resources are unavailable, execution records the blocker without partially creating resources. Replenish stock or resolve capacity issues before retrying. Changed quotation terms require fresh analysis and approval. Historical reports without a compatible Supabase snapshot must also be reanalyzed before execution.
 
-Generate the full migration and standalone components after an authorized seed/schema change with `uv run --locked --project backend python backend/scripts/export_database_sql.py`. Review the generated SQL before applying it. Reruns intentionally preserve existing data; changing a seed file does not replace an existing database value.
+Execution requires `manufacturing_settings.is_sample=true`. Setting it false disables resource and progress actions while keeping business analysis available. Activity notifications are recorded within the application; external messaging, purchasing and equipment integration are outside the current scope.
 
-## After quotation approval
+## Example workflow
 
-For an existing rbdemo database, apply **[supabase/post_approval.sql](supabase/post_approval.sql)** once in the SQL editor, then restart the backend. This upgrade adds six tables and replaces the operational snapshot RPC to account for reservations. It preserves stock balances, settings and existing reports. For a new database, the current `database_setup.sql` includes this upgrade. Historical approved reports are not automatically executed; analyze and approve a fresh project.
+1. Create a quotation for four performance-blackout roller blinds with a flexible deadline and sufficient available stock.
+2. Review material requirements, costs, scheduling, source evidence and all six agent findings.
+3. Approve the quotation with the required confirmations and execution authorization.
+4. Inspect the work order, material reservation, booked dates and task checklist.
+5. Record production, manufacturing completion, quality approval and installation completion.
+6. Reopen the saved report to review the persisted evidence and activity history.
 
-New approval requires the three review confirmations **and** “I authorize demo material reservation and work-order creation.” The API stores the approval and a unique queued job in one transaction. A second LangGraph workflow validates the approval, prepares inventory/production/quality/installation handoffs and calls one transactional execution tool. The tool rechecks current specifications, prices, policy, stock and bookings before creating any resources. Changes to quote terms require a fresh analysis/approval; an inventory or capacity shortfall blocks execution without partial reservations/orders. Report approval and execution status are separate: a quote can be accepted while execution needs attention.
+To explore exception handling, use a quantity exceeding available stock or an infeasible deadline. The coordinator explains the blockers and prevents approval until a new analysis resolves them. Dates follow the current Dubai business date and configured working calendar.
 
-“Analyze a new quotation using Supabase business data before execution” means the saved report has no Supabase business snapshot (for example, a legacy seed or an offline analysis). Changing the current backend configuration does not rewrite old reports. **Create fresh quotation** opens the original brief with refreshed catalog data; check its deadline, analyze again, then review and approve the new report. Existing report/approval history is preserved and the approval is not transferred. The UI warns before review when provenance is missing or mismatched and replaces an ineffective retry with this recovery action. Stock shortfalls can still be retried after replenishment. No SQL upgrade is needed for this UI change.
+## API reference
 
-The database workflow is enabled only while `manufacturing_settings.is_sample=true`, matching the app's interview scope. Setting it false keeps read-only business analysis available but disables these demo execution/progress actions. Invited-reviewer sign-in does not establish real factory roles; operational authorization and integrations remain required for real company actions. `DATA_MODE=demo` remains required.
+| Method | Endpoint                                | Purpose                                        |
+| ------ | --------------------------------------- | ---------------------------------------------- |
+| GET    | `/api/health`                           | Runtime configuration and business-data status |
+| GET    | `/api/catalog`                          | Current materials, profiles and settings       |
+| POST   | `/api/materials`                        | Add a material record                          |
+| GET    | `/api/knowledge/portfolio`              | Product catalog and source register            |
+| POST   | `/api/knowledge/ask`                    | Ask a grounded company or product question     |
+| POST   | `/api/knowledge/entries`                | Add reviewed knowledge                         |
+| POST   | `/api/projects/analyze`                 | Run quotation analysis and save the report     |
+| GET    | `/api/projects`                         | List the latest 50 reports                     |
+| GET    | `/api/projects/{id}`                    | Retrieve a report and its evidence             |
+| POST   | `/api/projects/{id}/approve`            | Record approval and queue execution            |
+| POST   | `/api/projects/{id}/execute`            | Retry execution safely                         |
+| POST   | `/api/projects/{id}/work-order/actions` | Record progress or cancellation                |
 
-| New table | Responsibility |
-|---|---|
-| `approval_jobs` | Durable queue, status, blocker reason and agent handoffs; one job per report |
-| `work_orders` | Booked plan and progress state; one work order per report |
-| `material_reservations` | Active, consumed or released fabric allocation; one allocation per report |
-| `production_bookings` | Factory and installation hours by working date |
-| `work_order_tasks` | Manufacturing task, required quality checks and installation handover |
-| `project_events` | Approval, execution, quality, progress and cancellation audit entries |
+Authenticated deployments require a Supabase-verified session and an allowed, confirmed email for every API route. New approvals record the verified user ID/email; progress records the verified email as its actor.
 
-Approval reserves material without reducing physical on-hand stock. The Material library reports **available**, **on hand** and **reserved** quantities. In the SQL editor, `inventory_materials.stock_lm` is on-hand stock; `/api/catalog` exposes `stock_lm` as available stock after active reservations. Reservation and capacity locks prevent two simultaneous approvals from overselling the same material or overbooking daily hours.
+## Project structure
 
-Progress is explicit: **Ready for production → In production → Awaiting quality checks → Ready for installation → Completed**. “Record manufacturing complete” consumes material exactly once. Quality approval requires every current checklist ID; failed quality holds installation until checks are repeated. Cancellation before production releases material and bookings. After manufacturing, cancellation releases unused installation bookings but retains consumed material and factory history. A started manufacturing order must finish/report consumption before cancellation; the system does not assume partially processed fabric can be returned.
+```text
+backend/
+  app/api/                 FastAPI routes
+  app/workflow.py           Six-agent quotation graph
+  app/execution.py          Post-approval graph and worker
+  app/business_data.py      Validated operational snapshots
+  app/knowledge.py          Retrieval and grounded answers
+  app/company_knowledge.py  Company-profile source lookup
+  app/llm.py                Chat-provider adapters
+  app/access.py             Session validation and access policy
+  app/store.py              Report persistence
+  scripts/                  Database, provider and indexing utilities
+  tests/                    Backend and optional SQL integration tests
+frontend/
+  src/pages/                Main application pages
+  src/components/           Forms, layout and report views
+  src/features/             Knowledge assistant and execution controls
+  src/hooks/                Workspace state and UI behavior
+  src/auth/                 Sign-in and session management
+  tests/                    Playwright browser workflows
+supabase/                   SQL migrations and seed records
+deploy/                    Cloud Run and Vercel deployment guide
+scripts/                    Local setup and startup helpers
+```
 
-`POST_APPROVAL_WORKER_ENABLED=true` starts a lightweight worker with FastAPI. It polls queued approvals every ten seconds and recovers after a restart. Blocked jobs require explicit Retry execution after resolving the issue. Approval and effect commits are distinct transactions linked by the durable queue. The terminal effect transaction is atomic and idempotent; a lost response or competing workers cannot duplicate resources. This design uses durable database jobs and idempotent tools, not an in-memory pause or a LangGraph checkpoint backend.
+## Development checks
 
-Demo journey: analyze four Performance-blackout rollers with a flexible deadline, approve with execution consent, inspect the Work order tab, start production, record manufacturing complete, confirm all quality checks, and record installation complete. Reopen the saved report to verify persistence. Test cancellation on a separate project before production. Resource reservations affect later analyses, so repeated large-order demonstrations may require cancellation/replenishment in the sample dataset.
+Run from `backend`:
 
-Notifications currently mean the in-app activity log only. No customer/supplier emails, purchasing, equipment control or automatic declarations of finished work are performed. Operators explicitly attest to progress; their names are not authenticated identities in this private prototype.
+```bash
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked pytest -q
+```
+
+Run from `frontend`:
+
+```bash
+npm run format:check
+npm run typecheck
+npm run build
+npx playwright install chromium
+npm run test:e2e
+npm run test:auth
+```
+
+Browser tests start isolated services and use sample records or mocked authentication. Backend tests cover calculations, workflow gates, persistence and provider failures. These checks do not verify live provider availability or hosted credentials.
+
+Optional SQL integration tests require `DATABASE_TEST_URL`, pgvector and separate `psycopg[binary]` tooling. They create roles, schema and test records: use an empty disposable PostgreSQL database, never an application database. Regular test runs skip this module when it is not configured.
+
+Backend dependencies are defined in `backend/pyproject.toml` and locked in `backend/uv.lock`; frontend dependencies use `frontend/package-lock.json`. Preserve lockfiles for reproducible installations.
+
+## Deployment and current scope
+
+Follow [the deployment guide](deploy/README.md) to host React on Vercel and the FastAPI Docker container on Google Cloud Run, with Supabase persistence and sign-in. The container runs as a non-root user; server secrets are injected through Secret Manager. Production startup requires authentication.
+
+The deployment configuration scales Cloud Run to zero, caps instances at two and disables the idle worker for request-based CPU. Approvals and explicit execution retries run within requests. Google Cloud requires billing; usage, builds and storage may incur charges. Vercel can rebuild on Git pushes; backend deployment currently uses the deployment script.
+
+Current boundaries and expansion areas:
+
+- Estimation uses one uniform opening size per quotation. Mixed opening schedules and new product engineering models require additional calculations and approved inputs.
+- External shades and smart products support discovery; awnings, pergolas, tensile structures and retractable roofs require dedicated engineering and costing models before quotation support.
+- Hosted users share the same workspace and permissions. A business rollout requires role-based authorization, organization-level data access and rate controls.
+- Quotation analysis is synchronous and may wait for multiple provider calls. Background analysis jobs and progress updates are a future improvement.
+- Factory execution remains limited to sample data. Verified operational policy, technical documentation and real factory integrations are required before live resource commitments.

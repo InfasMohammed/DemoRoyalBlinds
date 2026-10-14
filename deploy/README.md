@@ -1,6 +1,6 @@
-# Deploy the private interview demo
+# Deployment guide
 
-Use Google Cloud project **demoroyalblinds**, Cloud Run for FastAPI, Vercel for React, and the existing rbdemo Supabase project. Reviewers receive the Vercel link and a Supabase Auth account. Invited reviewers have equal access to this shared sample dataset, including quotation creation, knowledge/material additions, approvals and work-order progress. This is a private interview demonstration, not a production factory or a multi-tenant service.
+Deploy Royal Blinds Operations Studio using Google Cloud project **demoroyalblinds**, Cloud Run for FastAPI, Vercel for React, and the existing rbdemo Supabase project. Invited users access the Vercel link with a Supabase Auth account and have equal access to the shared sample dataset, including quotation creation, knowledge/material additions, approvals and work-order progress. The current deployment supports controlled evaluation; live factory integration and organization-level data isolation require further implementation.
 
 Cloud Run requires billing to be enabled. The free allowance may cover a small demo, but builds, image storage, secrets, networking and usage beyond allowances can incur charges. Check current pricing for your account and region. Configure a budget alert; alerts do not stop charges. The script sets zero minimum instances and at most two instances. A first request can wait for a cold start.
 
@@ -14,10 +14,10 @@ Keep Supabase RLS and anonymous-table restrictions in place. Backend secrets are
 
 Select **demoroyalblinds** in Google Cloud Console and create these secrets in **Secret Manager**, with an enabled version:
 
-| Name | Value entered securely in Google Cloud Console |
-|---|---|
-| `rbdemo-supabase-key` | Supabase server secret/service-role key |
-| `rbdemo-nvidia-key` | NVIDIA API key |
+| Name                  | Value entered securely in Google Cloud Console |
+| --------------------- | ---------------------------------------------- |
+| `rbdemo-supabase-key` | Supabase server secret/service-role key        |
+| `rbdemo-nvidia-key`   | NVIDIA API key                                 |
 
 The script grants the runtime service account access to these two secrets. Values are injected into Cloud Run at startup, not copied into the image or frontend. The Google account performing deployment needs permissions to enable APIs, build/push images, deploy Cloud Run, create/use the runtime service account and grant its secret access. Runtime permission does not grant deployment permission.
 
@@ -52,22 +52,22 @@ Cloud Build's build identity needs image-writer and logging permissions. A restr
 
 Import `InfasMohammed/DemoRoyalBlinds`, select `main`, and configure:
 
-| Setting | Value |
-|---|---|
-| Root Directory | `frontend` |
-| Framework | Vite |
-| Build Command | `npm run build` |
-| Output Directory | `dist` |
-| Node.js | 22 or newer supported version |
+| Setting          | Value                         |
+| ---------------- | ----------------------------- |
+| Root Directory   | `frontend`                    |
+| Framework        | Vite                          |
+| Build Command    | `npm run build`               |
+| Output Directory | `dist`                        |
+| Node.js          | 22 or newer supported version |
 
 Set these **Production** environment variables before building:
 
-| Variable | Value |
-|---|---|
-| `VITE_API_BASE_URL` | Cloud Run origin from step 3, without `/api` |
-| `VITE_REQUIRE_AUTH` | `true` |
-| `VITE_SUPABASE_URL` | `https://neeupsyqguamtfmpanmp.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable or legacy anon key |
+| Variable                        | Value                                        |
+| ------------------------------- | -------------------------------------------- |
+| `VITE_API_BASE_URL`             | Cloud Run origin from step 3, without `/api` |
+| `VITE_REQUIRE_AUTH`             | `true`                                       |
+| `VITE_SUPABASE_URL`             | `https://neeupsyqguamtfmpanmp.supabase.co`   |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable or legacy anon key      |
 
 Vite embeds these at build time; redeploy after changing them. Never set a server key, NVIDIA key or LLM key in a `VITE_` variable. The build rejects Vercel deployments without authentication, malformed origins and browser server keys. Browser requests go directly to Cloud Run, with the user's access token, rather than through a Vercel function or local Vite proxy.
 
@@ -97,7 +97,7 @@ Cloud Run's `--allow-unauthenticated` permits browsers to reach the HTTPS endpoi
 
 New authenticated approvals record verified user ID/email alongside the display name. Progress uses the verified email as its actor. Existing reports are preserved. Per-role permissions, tenant isolation, rate controls and broader audit requirements remain work for a real business rollout.
 
-Quotation requests remain synchronous and wait for agent commentary. Cloud Run uses a 600-second timeout to accommodate that existing workflow. This does not resolve the previously reported stalled browser request. If it recurs, inspect browser Network and Cloud Run request logs; check saved reports before submitting the same quotation again.
+Quotation requests remain synchronous and wait for agent commentary. Cloud Run uses a 600-second timeout to accommodate that existing workflow. For delayed responses, inspect browser Network and Cloud Run request logs; check saved reports before submitting the same quotation again.
 
 The idle approval worker is disabled with request-based Cloud Run CPU. Approval performs execution within its request; Retry execution recovers durable pending/blocked jobs. Automatic idle recovery needs a separate worker/scheduled service or an explicitly budgeted always-on CPU configuration.
 
