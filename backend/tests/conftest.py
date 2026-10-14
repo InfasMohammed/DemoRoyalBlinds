@@ -5,6 +5,9 @@ import pytest
 # Set before test modules import the application. Missing cloud credentials must
 # not prevent collecting offline tests; database tests opt in with monkeypatch.
 os.environ["BUSINESS_DATA_SOURCE"] = "demo"
+os.environ["APP_ENV"] = "development"
+os.environ["AUTH_REQUIRED"] = "false"
+os.environ.pop("K_SERVICE", None)
 
 
 @pytest.fixture(autouse=True)

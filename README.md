@@ -14,7 +14,7 @@ The initial company knowledge base contains website text and links supplied by t
 | LangGraph | Six specialist nodes, shared typed state, parallel inventory and quality checks |
 | React / TypeScript | Dashboard, intake form, reports, evidence inspector, quotation and review |
 | Node.js / Vite | Frontend development server, build and browser tests |
-| Supabase | Operational catalog, stock, costing/planning settings, knowledge and report storage through the trusted backend |
+| Supabase | Business data, knowledge and report storage through the trusted backend; reviewer sign-in for the hosted demo |
 | OpenAI / NVIDIA chat APIs | Optional specialist summaries and retrieval-grounded answers; OpenAI embeddings for optional vector search |
 
 Node.js powers the React development and build workflow. Python owns the application API; a second Node API is unnecessary for this scope.
@@ -24,6 +24,7 @@ Node.js powers the React development and build workflow. Python owns the applica
 ```text
 backend/app/
   main.py              Application factory, configuration and worker lifecycle
+  access.py            Verified Supabase sessions and invited reviewer access
   api/                 Health, business, knowledge and project routers
   clock.py             Dubai business date
   workflow.py          Six manufacturing specialists and quotation graph
@@ -43,6 +44,7 @@ frontend/src/
   lib/                 Navigation, formatting, agent roster and intake defaults
   styles/              Shared, branding, knowledge and form styles
   types.ts             Shared API response contracts
+  auth/                Reviewer sign-in, session management and sign-out
 ```
 
 API routers obtain the application's report store through a FastAPI dependency. Each app instance owns its store, and the approval worker is stopped on shutdown, including exceptional shutdown. Frontend pages render data and invoke actions; the studio hook owns loading, analysis, approval and report updates. SQL migrations and database seed exporters remain in `supabase/` and `backend/scripts/`.
@@ -159,7 +161,7 @@ Each analysis reads one operational SQL snapshot plus one knowledge SQL snapshot
 
 `BUSINESS_DATA_SOURCE=auto` selects Supabase when both backend variables are set and otherwise selects offline demo fixtures. `supabase` requires database configuration and fails explicitly if it cannot read valid records. `demo` explicitly uses bundled fixtures in `backend/app/data` for offline testing. Database failures never silently fall back to sample stock or local knowledge. Optional vector-search failure can fall back to keyword search over the **same current database corpus**. Keyword retrieval from Supabase needs no embedding key and still supports NVIDIA-generated RAG answers.
 
-All database tables use RLS without anonymous browser access; snapshot RPCs run with the caller's privileges and are executable only by `service_role`. The local API still needs authentication and authorization before public deployment. The initial migration is labeled sample data (`manufacturing_settings.is_sample=true`); database storage alone does not make those values verified company facts. After reviewing/replacing records, update the provenance and sample flag appropriately.
+All database tables use RLS without anonymous browser access; snapshot RPCs run with the caller's privileges and are executable only by `service_role`. Local development defaults to credential-free access; the hosted private demo requires Supabase sign-in and an invited email. The initial migration is labeled sample data (`manufacturing_settings.is_sample=true`); database storage alone does not make those values verified company facts. After reviewing/replacing records, update the provenance and sample flag appropriately.
 
 **Editable-stock demonstration:** In the Supabase table editor, change `inventory_materials.stock_lm` for `linen_blackout` from 28 to 100. Refresh the Material library and analyze the 24-blind shortage scenario again. Under the unchanged seed rules, the 68.69 lm requirement is now covered and the material blocker disappears. Change the value back after the demonstration. Changes do not retroactively rewrite old reports.
 
@@ -224,6 +226,8 @@ npm run build
 
 # Browser workflows; /usr/bin/chromium is available in this cloud machine
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
+# Sign-in, session persistence and authenticated API routing with mocked Auth
+CHROMIUM_PATH=/usr/bin/chromium npm run test:auth
 ```
 
 On another machine, install Playwright's Chromium with `npx playwright install chromium` and omit `CHROMIUM_PATH`. Browser tests start an isolated offline backend on 8010 and frontend on 5180, with a unique local report file for each run. Supabase/LLM environment values are overridden with blanks for those test services. No running app or Supabase inventory is used by browser approval tests.
@@ -247,7 +251,13 @@ Ruff checks Python imports and unused declarations and formats backend code. Pre
 
 The current estimating workflow supports motorized rollers, manual rollers and manual-track curtains with one uniform opening size per project. Product discovery covers the supplied internal, external and smart portfolio. Tensile structures, retractable roofs, awnings and canopies require different engineering and costing models and are not supported by the estimating tools. Add mixed opening schedules, supplier-backed lead times and verified product ratings before expanding estimation scope.
 
-This version is for a private interview demo. FastAPI has no user authentication: reviewer names are attestations, not verified identities. Supabase RLS protects direct browser database access, but does not authenticate the API. Before public deployment, add Supabase Auth, backend JWT validation, role checks, per-user/organization report access, rate limiting and an immutable audit log. Local JSON storage supports one backend process only; use Supabase for multiple processes. The reservation/booking workflow is bounded to sample data. Supplier commitments, verified operator roles and real factory integrations remain separate production work.
+This version is for a private interview demo. `AUTH_REQUIRED=true` enables Supabase-verified user tokens and an `AUTH_ALLOWED_EMAILS` list of confirmed invited accounts. All API routes are protected; production startup requires authentication. Invited accounts have equal access to shared demo data. New approvals record the verified user ID/email, and progress uses the verified email as actor. Local development defaults to `AUTH_REQUIRED=false`. A real business rollout still needs per-role permissions, per-user/organization data access, rate controls and broader audit requirements. Local JSON storage supports one backend process only; hosted mode uses Supabase. Reservation/progress actions remain bounded to sample data; real factory integrations are separate work.
+
+## Deployment
+
+Follow [deploy/README.md](deploy/README.md) for Vercel, Google Cloud Run and the existing Supabase project. It includes reviewer accounts, Secret Manager configuration, a Cloud Shell deployment script, frontend environment variables and signed-in smoke checks. The Docker image runs as a non-root user, uses locked dependencies and listens on Cloud Run's `PORT`. Vercel API requests use `VITE_API_BASE_URL` directly; server keys never enter the frontend build. Upload exclusions keep local credentials and logs out of the image and Cloud Build source.
+
+Cloud Run uses request-based CPU with the background worker disabled, zero minimum instances, at most two instances and a 600-second request timeout. Approval and explicit Retry execution still run within requests. Quotation generation remains synchronous; hosting does not by itself fix a stalled browser response. Free allowances are usage-dependent and billing must be enabled; budget alerts are not spending caps.
 
 Live OpenAI, NVIDIA and Supabase integration need your configured accounts and were not verified without credentials. Local behavior, business snapshot updates, the NVIDIA adapter and provider failures are tested independently. Integration checks run against a disposable PostgreSQL/pgvector database, including migration/RLS, preservation on rerun, vector invalidation, atomic approval, stock reservation races, capacity/deadline rollback, stale prices, cancellation and guarded production progress. Supabase SDK RPC transport is also tested using mocked HTTP; this is distinct from live access to rbdemo.
 
@@ -322,7 +332,7 @@ New approval requires the three review confirmations **and** “I authorize demo
 
 “Analyze a new quotation using Supabase business data before execution” means the saved report has no Supabase business snapshot (for example, a legacy seed or an offline analysis). Changing the current backend configuration does not rewrite old reports. **Create fresh quotation** opens the original brief with refreshed catalog data; check its deadline, analyze again, then review and approve the new report. Existing report/approval history is preserved and the approval is not transferred. The UI warns before review when provenance is missing or mismatched and replaces an ineffective retry with this recovery action. Stock shortfalls can still be retried after replenishment. No SQL upgrade is needed for this UI change.
 
-The database workflow is enabled only while `manufacturing_settings.is_sample=true`, matching the app's interview scope. Setting it false keeps read-only business analysis available but disables these demo execution/progress actions. Role authentication and operational integrations must be implemented before enabling actions on real company records. `DATA_MODE=demo` remains required.
+The database workflow is enabled only while `manufacturing_settings.is_sample=true`, matching the app's interview scope. Setting it false keeps read-only business analysis available but disables these demo execution/progress actions. Invited-reviewer sign-in does not establish real factory roles; operational authorization and integrations remain required for real company actions. `DATA_MODE=demo` remains required.
 
 | New table | Responsibility |
 |---|---|

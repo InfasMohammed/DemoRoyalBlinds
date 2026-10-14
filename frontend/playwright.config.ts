@@ -8,6 +8,7 @@ const reportPath = fileURLToPath(
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: 'auth.spec.ts',
   fullyParallel: false,
   workers: 1,
   use: {
@@ -31,13 +32,20 @@ export default defineConfig({
         NVIDIA_API_KEY: '',
         KNOWLEDGE_RETRIEVAL_MODE: 'local',
         POST_APPROVAL_WORKER_ENABLED: 'true',
+        APP_ENV: 'development',
+        AUTH_REQUIRED: 'false',
+        K_SERVICE: '',
       },
       url: 'http://127.0.0.1:8010/api/health',
       reuseExistingServer: false,
     },
     {
       command: 'npm run dev -- --port 5180',
-      env: { API_PROXY_TARGET: 'http://127.0.0.1:8010' },
+      env: {
+        API_PROXY_TARGET: 'http://127.0.0.1:8010',
+        VITE_REQUIRE_AUTH: 'false',
+        VITE_API_BASE_URL: '',
+      },
       url: 'http://127.0.0.1:5180',
       reuseExistingServer: false,
     },

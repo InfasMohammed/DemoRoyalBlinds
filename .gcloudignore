@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+.runtime
+**/.env
+**/.env.*
+**/*.log
+**/*.pem
+**/*.key
+frontend/node_modules
+backend/.venv

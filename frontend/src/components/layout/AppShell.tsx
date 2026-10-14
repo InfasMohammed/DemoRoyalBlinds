@@ -12,6 +12,7 @@ import type { Catalog, Health, Report } from '../../types'
 import { modeLabel } from '../../lib/format'
 import { navigation, pageDetails } from '../../lib/navigation'
 import type { Page } from '../../lib/navigation'
+import { SessionControls } from '../../auth/AuthGate'
 
 type Props = {
   health: Health | null
@@ -113,6 +114,7 @@ export default function AppShell({
             <strong>{currentPage.name}</strong>
           </div>
           <div className="topbar-right">
+            <SessionControls />
             <span className={`connection ${health ? '' : 'offline'}`}>
               <i />
               {health ? 'Backend connected' : 'Connecting'}

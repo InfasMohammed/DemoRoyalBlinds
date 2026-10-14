@@ -5,16 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/validate-deployment.mjs && tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:auth": "playwright test --config playwright.auth.config.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write src tests vite.config.ts playwright.config.ts tsconfig.json package.json",
-    "format:check": "prettier --check src tests vite.config.ts playwright.config.ts tsconfig.json package.json"
+    "format": "prettier --write src tests scripts vite.config.ts playwright.config.ts playwright.auth.config.ts tsconfig.json package.json vercel.json",
+    "format:check": "prettier --check src tests scripts vite.config.ts playwright.config.ts playwright.auth.config.ts tsconfig.json package.json vercel.json"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/manrope": "^5.3.0",
+    "@supabase/supabase-js": "2.117.3",
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

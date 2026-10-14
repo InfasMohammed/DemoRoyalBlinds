@@ -1,0 +1,32 @@
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 32px;
+}
+.auth-card img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 24px;
+}
+.auth-card h1 {
+  font-size: 25px;
+  margin: 12px 0;
+}
+.auth-card form {
+  display: grid;
+  gap: 16px;
+  margin: 24px 0;
+}
+.auth-card input {
+  width: 100%;
+}
+.auth-card .fine-print {
+  margin-bottom: 0;
+}
