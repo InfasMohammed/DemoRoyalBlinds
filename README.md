@@ -87,6 +87,8 @@ If timeouts continue, run `uv run --locked --project backend python backend/scri
 
 The connection check defaults to streaming for NVIDIA, using the same collector as the application. Add `--no-stream` to compare with the previous request mode. From inside the `backend` folder use `uv run --locked python scripts/check_chat.py --timeout 60`. The transport change is tested with simulated provider streams; compare the direct checks on your machine to establish whether it resolves your live timeout.
 
+For a full grounded Q&A check, run `uv run --locked python scripts/check_chat.py --rag --timeout 60` from `backend`. It reads the current knowledge corpus and asks the smartphone/battery question through the same logic as the API. It reports retrieval source, generation mode and safe validation reasons, without printing generated text, reasoning or credentials. It changes no business records. This timeout override applies only to the check, not the running backend.
+
 With a key, all six nodes call the model with their calculated facts and record structured summaries and recommendations. Prices, dates and approval decisions still come from Python calculations. A provider failure is visibly labeled `rules_fallback`, not treated as successful AI execution. Key presence is only configuration evidence; confirm actual `llm` findings in the agent trace.
 
 The selected provider receives the submitted brief and relevant project facts. This prototype should use synthetic data. It does not enable external tracing automatically.
@@ -240,6 +242,8 @@ Product-range questions (for example, “What outdoor shade products are listed?
 | `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` after indexing | 1536-dimensional OpenAI embeddings and Supabase cosine search, with category/product filters |
 
 Generated answers are instructed to answer directly, usually within 150 words, without repeating full passages. Declared citation IDs must match inline citation IDs and retrieved sources; this validates references, not every factual claim. Full source passages remain available in expandable details. Keyword search treats indoor/internal and outdoor/external as equivalents.
+
+NVIDIA and compatible-provider Q&A ask for plain final-answer text with exact inline source IDs. The backend derives the used-source list from those citations and validates it against retrieved passages, avoiding a redundant model-generated JSON citation list. The previous JSON Q&A form is also accepted when valid. OpenAI uses its native structured answer adapter. Missing citations, unsupported source IDs and invalid JSON/structure produce distinct safe warnings and a source-excerpt fallback. Manufacturing narrative responses still use their structured schemas.
 
 Vector failure or an unindexed corpus visibly falls back to local retrieval. Model failure or invalid citations visibly falls back to concise original source excerpts, with a visible reason. Scores express retrieval relevance, never factual confidence. Database vector matches are accepted only when IDs and content match the current knowledge snapshot; stale matches cannot replace its source text or citation links. The specification and quality agents use this same retrieval tool and persist their passages as report evidence; prices and scheduling calculations remain controlled by Python.
 

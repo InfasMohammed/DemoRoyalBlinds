@@ -51,7 +51,7 @@ def mock_nvidia(monkeypatch, content, status=200, finish_reason='stop'):
         assert body['stream'] is True
         assert body['max_tokens'] == 4096
         assert 'response_format' not in body
-        assert 'JSON object' in body['messages'][0]['content']
+        assert 'JSON object' in body['messages'][0]['content'] or 'plain text' in body['messages'][0]['content']
         if status != 200:
             return httpx.Response(status, json={'error': {'message': 'Provider quota exceeded'}})
         return stream_response(content, finish_reason)
@@ -85,8 +85,9 @@ def test_invalid_provider_output_does_not_pass_validation(monkeypatch, content):
 
 def test_truncated_response_is_rejected(monkeypatch):
     mock_nvidia(monkeypatch, '{"summary":"partial"}', finish_reason='length')
-    with pytest.raises(ValueError, match='complete answer'):
+    with pytest.raises(ValueError, match='complete answer') as caught:
         llm.structured_chat(AgentNarrative, [('human', 'Project')])
+    assert llm.failure_reason(caught.value).startswith('Chat provider reached the generation limit')
 
 
 def test_stream_without_finish_marker_cannot_be_accepted(monkeypatch):
@@ -151,6 +152,69 @@ def test_nvidia_rag_keeps_citations(monkeypatch):
     assert result['generation_mode'] == 'llm'
     assert result['retrieval_mode'] == 'local_keyword'
     assert '[RB-SMART-03]' in result['answer']
+
+
+def test_nvidia_plain_answer_supports_both_parts_of_question(monkeypatch):
+    calls = mock_nvidia(monkeypatch,
+        'The website describes optional smartphone control [RB-SMART-02] and rechargeable battery '
+        'or mains power for motorized roller blinds [RB-SMART-03]. Confirm the specific model and controls.')
+    result = knowledge.answer_question('Can motorized roller blinds use smartphone control and a rechargeable battery?')
+    assert result['generation_mode'] == 'llm'
+    assert result['generation_warning'] is None
+    assert '[RB-SMART-02]' in result['answer']
+    assert '[RB-SMART-03]' in result['answer']
+    assert 'not JSON' in calls[0]['messages'][0]['content']
+    assert 'PRIVATE_REASONING' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('text', [
+    '[RB-SMART-03] The supplied copy describes rechargeable battery power.',
+    'Smartphone and battery options are described [RB-SMART-02, RB-SMART-03].',
+    'Battery options are described [ RB-SMART-03 ].',
+])
+def test_equivalent_inline_citation_formats_keep_exact_source_ids(monkeypatch, text):
+    mock_nvidia(monkeypatch, text)
+    result = knowledge.answer_question('Can motorized roller blinds use smartphone control and a rechargeable battery?')
+    assert result['generation_mode'] == 'llm'
+    assert '[RB-SMART-03]' in result['answer']
+
+
+@pytest.mark.parametrize(('answer', 'code', 'message'), [
+    ('The copy describes battery power [RB-SMART-03].', 0, 'PASS: Generated answer'),
+    ('An unsupported claim [INVENTED].', 1, 'cited a source that was not retrieved'),
+])
+def test_rag_diagnostic_checks_real_route_and_redacts_output(monkeypatch, capsys, answer, code, message):
+    from scripts.check_chat import run_rag_check
+    mock_nvidia(monkeypatch, answer)
+    assert run_rag_check(60) == code
+    assert llm.qa_chat_timeout_seconds() == 30
+    output = capsys.readouterr().out
+    assert message in output
+    assert 'knowledge=demo' in output
+    assert answer not in output
+    assert 'fake-nvidia-key' not in output
+    assert 'PRIVATE_REASONING' not in output
+
+
+@pytest.mark.parametrize(('answer', 'reason'), [
+    ('Battery power is possible.', 'omitted the required source citations'),
+    ('Battery power is possible [INVENTED].', 'cited a source that was not retrieved'),
+    ('Battery power is possible [RB-SMART-03, INVENTED].', 'cited a source that was not retrieved'),
+])
+def test_nvidia_plain_answers_still_require_valid_sources(monkeypatch, answer, reason):
+    mock_nvidia(monkeypatch, answer)
+    result = knowledge.answer_question('battery power', 'smart')
+    assert result['generation_mode'] == 'extractive_fallback'
+    assert reason in result['generation_warning']
+    assert result['answer'] != answer
+
+
+def test_invalid_json_has_a_specific_safe_warning(monkeypatch):
+    mock_nvidia(monkeypatch, '{broken json')
+    result = knowledge.answer_question('battery power', 'smart')
+    assert result['generation_mode'] == 'extractive_fallback'
+    assert result['generation_warning'].startswith('Chat provider returned invalid JSON.')
+    assert '{broken json' not in json.dumps(result)
 
 
 def test_nvidia_rate_limit_falls_back_without_exposing_raw_errors(monkeypatch):

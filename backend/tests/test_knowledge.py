@@ -46,7 +46,7 @@ def test_product_range_is_complete_without_a_model_or_top_k_limit(question, monk
 
     monkeypatch.setenv('KNOWLEDGE_RETRIEVAL_MODE', 'supabase_vector')
     monkeypatch.setenv('LLM_API_KEY', 'not-a-real-key')
-    monkeypatch.setattr(knowledge, 'structured_chat', unexpected)
+    monkeypatch.setattr(knowledge, 'grounded_chat', unexpected)
     monkeypatch.setattr(knowledge, 'embedding_client', unexpected)
     answer = knowledge.answer_question(question)
     expected = [p for p in knowledge.DATA['products'] if p['category'] == 'external']
@@ -180,7 +180,7 @@ def test_generated_answer_rejects_invented_citations(monkeypatch):
         def invoke(self, messages):
             return knowledge.GroundedAnswer(answer='Fake claim [INVENTED]', cited_chunk_ids=['INVENTED'])
 
-    monkeypatch.setattr(knowledge, 'structured_chat', lambda schema, messages, **kwargs: Model().invoke(messages))
+    monkeypatch.setattr(knowledge, 'grounded_chat', lambda schema, messages, **kwargs: Model().invoke(messages))
     result = knowledge.answer_question('battery power', 'smart')
     assert result['generation_mode'] == 'extractive_fallback'
     assert 'Fake claim' not in result['answer']
@@ -196,7 +196,7 @@ def test_valid_generated_answer_is_labeled_as_rag(monkeypatch):
         def invoke(self, messages):
             return knowledge.GroundedAnswer(answer='The supplied copy describes battery or mains power [RB-SMART-03].', cited_chunk_ids=['RB-SMART-03'])
 
-    monkeypatch.setattr(knowledge, 'structured_chat', lambda schema, messages, **kwargs: Model().invoke(messages))
+    monkeypatch.setattr(knowledge, 'grounded_chat', lambda schema, messages, **kwargs: Model().invoke(messages))
     result = knowledge.answer_question('battery or mains power', 'smart')
     assert result['generation_mode'] == 'llm'
     assert '[RB-SMART-03]' in result['answer']
@@ -208,7 +208,7 @@ def test_model_cannot_hide_additional_inline_sources(monkeypatch):
     monkeypatch.setattr(knowledge, 'retrieve', lambda *args, **kwargs: {
         'citations': retrieved, 'retrieval_mode': 'local_keyword', 'knowledge_source': 'demo', 'warning': None,
     })
-    monkeypatch.setattr(knowledge, 'structured_chat', lambda *args, **kwargs: knowledge.GroundedAnswer(
+    monkeypatch.setattr(knowledge, 'grounded_chat', lambda *args, **kwargs: knowledge.GroundedAnswer(
         answer='Some answer [RB-SMART-03] [RB-SMART-04]', cited_chunk_ids=['RB-SMART-03']))
     answer = knowledge.answer_question('battery power')
     assert answer['generation_mode'] == 'extractive_fallback'

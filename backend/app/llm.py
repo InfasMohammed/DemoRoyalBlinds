@@ -18,6 +18,19 @@ NVIDIA_URL = 'https://integrate.api.nvidia.com/v1'
 OPENAI_URL = 'https://api.openai.com/v1'
 
 
+class CitationValidationError(ValueError):
+    """A fixed reason code, never provider text or sensitive exception details."""
+    def __init__(self, code):
+        self.code = code
+        super().__init__('Citation validation failed.')
+
+
+class CompletionValidationError(ValueError):
+    def __init__(self, code):
+        self.code = code
+        super().__init__('Provider did not return a complete answer.')
+
+
 @dataclass(frozen=True)
 class ChatConfig:
     base_url: str
@@ -102,9 +115,9 @@ def request_chat_text(config: ChatConfig, messages, *, timeout_seconds, max_retr
                 finish_reason = choice.finish_reason if choice else None
                 content = choice.message.content if choice else None
         if finish_reason != 'stop':
-            raise ValueError('Provider did not return a complete answer.')
+            raise CompletionValidationError('length' if finish_reason == 'length' else 'incomplete')
         if not content:
-            raise ValueError('Provider returned no answer content.')
+            raise CompletionValidationError('empty')
         return content
     except TimeoutException as exc:
         # A streamed body's read timeout can escape the SDK as an HTTPX error.
@@ -143,6 +156,36 @@ def structured_chat(schema: type[T], messages: list[tuple[str, str]], *,
     return schema.model_validate_json(candidate)
 
 
+def grounded_chat(schema: type[T], messages: list[tuple[str, str]], *, timeout_seconds, max_retries=0) -> T:
+    """NVIDIA Q&A needs final prose with citations, not duplicate JSON metadata."""
+    config = chat_config()
+    if config.provider == 'openai':
+        return structured_chat(schema, messages, timeout_seconds=timeout_seconds, max_retries=max_retries)
+    if not config.api_key:
+        raise ValueError('Configure a chat provider key securely before enabling AI.')
+    instruction = ('Return only the final answer as plain text, not JSON or reasoning. '
+                   'Cite each source separately by enclosing its exact supplied ID in square brackets. '
+                   'Use only the source IDs supplied in the passages. Do not invent source IDs. '
+                   'Do not include a separate cited_chunk_ids list.')
+    request_messages = [{'role': 'system', 'content': '\n\n'.join(
+        content for role, content in messages if role == 'system') + '\n\n' + instruction}]
+    request_messages.extend({'role': 'user' if role == 'human' else role, 'content': content}
+                            for role, content in messages if role != 'system')
+    content = request_chat_text(config, request_messages, timeout_seconds=timeout_seconds, max_retries=max_retries)
+    # Also accept the previous structured form when a provider returns it.
+    fence = re.fullmatch(r'\s*```(?:json|text)?\s*\n?(.*?)\n?```\s*', content, re.S)
+    candidate = (fence.group(1) if fence else content).strip()
+    if candidate.startswith('{') or re.match(r'^\[\s*(?:\{|"|\])', candidate):
+        return schema.model_validate_json(candidate)
+    # Equivalent presentation of exact IDs is safe to canonicalize. Unknown
+    # IDs are retained so the grounding validator can reject them.
+    candidate = re.sub(r'\[\s*([A-Za-z0-9_-]+(?:\s*[,;]\s*[A-Za-z0-9_-]+)*)\s*\]',
+                       lambda match: ' '.join(f'[{part.strip()}]' for part in re.split(r'[,;]', match.group(1))),
+                       candidate)
+    cited_ids = list(dict.fromkeys(re.findall(r'\[([A-Za-z0-9_-]+)\]', candidate)))
+    return schema(answer=candidate, cited_chunk_ids=cited_ids)
+
+
 def embedding_key():
     # Backwards compatible with existing OpenAI deployments, while preventing
     # an NVIDIA chat key from being sent to OpenAI's embedding API.
@@ -161,6 +204,20 @@ def failure_reason(exc):
     if isinstance(exc, APIStatusError):
         return {401: 'Chat provider rejected authentication.', 403: 'Chat provider access was denied.',
                 429: 'Chat provider quota or rate limit was reached.'}.get(exc.status_code, 'Chat provider request failed.')
-    if isinstance(exc, (ValidationError, ValueError)):
+    if isinstance(exc, CitationValidationError):
+        return {'missing': 'Chat answer omitted the required source citations.',
+                'unsupported': 'Chat answer cited a source that was not retrieved.',
+                'mismatch': 'Chat answer citations did not match its declared source list.'}.get(
+                    exc.code, 'Chat answer did not pass source citation validation.')
+    if isinstance(exc, CompletionValidationError):
+        return {'length': 'Chat provider reached the generation limit before completing its answer.',
+                'empty': 'Chat provider returned no final answer text.',
+                'incomplete': 'Chat provider response ended without a complete answer.'}.get(
+                    exc.code, 'Chat provider returned an incomplete answer.')
+    if isinstance(exc, ValidationError):
+        if any(error['type'] == 'json_invalid' for error in exc.errors(include_input=False, include_context=False)):
+            return 'Chat provider returned invalid JSON.'
+        return 'Chat provider returned an answer with an invalid structure or length.'
+    if isinstance(exc, ValueError):
         return 'Chat provider response or configuration did not pass validation.'
     return 'Chat provider is unavailable.'
