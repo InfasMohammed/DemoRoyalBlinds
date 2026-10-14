@@ -225,13 +225,17 @@ The third enquiry deliberately flags an evidence gap. Marketing copy cannot conf
 
 Retrieval and generation are separate:
 
+Product-range questions (for example, “What outdoor shade products are listed?”) use a complete lookup of the current `company_products` catalog in Supabase mode, or the seed catalog offline. They return a concise list with citations to product records, labeled **Catalog answer**. This deterministic lookup is distinct from LLM RAG and avoids omitting products because passage retrieval has a top-k limit. Broad company-offering questions include both product ranges and the Smart Solutions area description. Catalog evidence establishes membership only; technical and live-data questions still require appropriate records.
+
 | Configuration | Actual behavior |
 |---|---|
-| `KNOWLEDGE_RETRIEVAL_MODE=local`, no LLM key | BM25-style keyword retrieval and original source excerpts; no generated AI answer |
+| `KNOWLEDGE_RETRIEVAL_MODE=local`, no LLM key | BM25-style keyword retrieval and up to three relevant original sentences; no generated AI answer |
 | Local retrieval with `LLM_API_KEY` | RAG: retrieved passages feed a structured model answer with validated source IDs |
 | `KNOWLEDGE_RETRIEVAL_MODE=supabase_vector` after indexing | 1536-dimensional OpenAI embeddings and Supabase cosine search, with category/product filters |
 
-Vector failure or an unindexed corpus visibly falls back to local retrieval. Model failure or invalid citations visibly falls back to source excerpts. Scores express retrieval relevance, never factual confidence. Database vector matches are accepted only when IDs and content match the current knowledge snapshot; stale matches cannot replace its source text or citation links. The specification and quality agents use this same retrieval tool and persist their passages as report evidence; prices and scheduling calculations remain controlled by Python.
+Generated answers are instructed to answer directly, usually within 150 words, without repeating full passages. Declared citation IDs must match inline citation IDs and retrieved sources; this validates references, not every factual claim. Full source passages remain available in expandable details. Keyword search treats indoor/internal and outdoor/external as equivalents.
+
+Vector failure or an unindexed corpus visibly falls back to local retrieval. Model failure or invalid citations visibly falls back to concise original source excerpts, with a visible reason. Scores express retrieval relevance, never factual confidence. Database vector matches are accepted only when IDs and content match the current knowledge snapshot; stale matches cannot replace its source text or citation links. The specification and quality agents use this same retrieval tool and persist their passages as report evidence; prices and scheduling calculations remain controlled by Python.
 
 The complete `database_setup.sql` already prepares knowledge storage. The standalone [supabase/knowledge_base.sql](supabase/knowledge_base.sql) creates knowledge tables only; it also needs `operations.sql` for metadata and snapshot RPCs before this backend can use database mode. **This is a separate migration from `demo_setup.sql`.** It adds `company_products`, `company_knowledge_chunks` and the `match_company_knowledge` RPC, preserving existing records and embeddings on repeat runs. Editing passage text in the database clears its old embedding through a trigger. It neither changes existing project reports nor enables anonymous access. All access stays on the backend service role.
 

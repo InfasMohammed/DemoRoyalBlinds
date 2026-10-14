@@ -112,6 +112,27 @@ def test_knowledge_uses_edited_database_text_and_new_passage(database):
     assert knowledge.portfolio()['chunk_count'] == 36
 
 
+def test_catalog_answer_uses_current_database_products_without_stale_listing_text(database):
+    rows, calls = database
+    corpus = rows['get_company_knowledge_snapshot']
+    product = next(p for p in corpus['products'] if p['id'] == 'sail_shades')
+    product['name'] = 'Reviewed Custom Sail Shades'
+    corpus['products'].append({**product, 'id': 'custom_canopy', 'name': 'Custom Canopy',
+                               'source_url': 'https://royalblinds.com/external-shades/custom-canopy/'})
+    first = knowledge.answer_question('What outdoor shade products are listed?')
+    assert first['knowledge_source'] == 'supabase'
+    assert first['generation_mode'] == 'catalog'
+    assert '8 listed product types' in first['answer']
+    assert '• Reviewed Custom Sail Shades [CATALOG-sail_shades]' in first['answer']
+    assert '• Custom Canopy [CATALOG-custom_canopy]' in first['answer']
+    assert all(c['source_kind'] == 'supabase_product_record' for c in first['citations'])
+    corpus['products'].pop()
+    second = knowledge.answer_question('What outdoor shade products are listed?')
+    assert 'Custom Canopy' not in second['answer']
+    assert '7 listed product types' in second['answer']
+    assert calls.count('get_company_knowledge_snapshot') == 2
+
+
 def test_database_failure_returns_503_without_fixture_fallback(database, monkeypatch):
     def broken(*args):
         raise RuntimeError('Sensitive raw database failure')

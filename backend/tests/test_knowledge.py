@@ -35,6 +35,65 @@ def test_smart_power_retrieval_has_original_source_and_heading():
     assert all(c['source_kind'] == 'user_supplied_website_copy' for c in answer['citations'])
 
 
+@pytest.mark.parametrize('question', [
+    'What outdoor shade products are listed?', 'What outdoor shade products does Royal Blinds offer?',
+    'Which external shades are available?', 'List all outdoor products',
+    'What outside products do you offer?',
+])
+def test_product_range_is_complete_without_a_model_or_top_k_limit(question, monkeypatch):
+    def unexpected(*args, **kwargs):
+        raise AssertionError('Catalog membership does not need a model or vector query.')
+
+    monkeypatch.setenv('KNOWLEDGE_RETRIEVAL_MODE', 'supabase_vector')
+    monkeypatch.setenv('LLM_API_KEY', 'not-a-real-key')
+    monkeypatch.setattr(knowledge, 'structured_chat', unexpected)
+    monkeypatch.setattr(knowledge, 'embedding_client', unexpected)
+    answer = knowledge.answer_question(question)
+    expected = [p for p in knowledge.DATA['products'] if p['category'] == 'external']
+    assert answer['generation_mode'] == 'catalog'
+    assert answer['retrieval_mode'] == 'product_catalog'
+    assert not answer['needs_review']
+    assert len(answer['citations']) == 7
+    assert all(f"• {p['name']} [CATALOG-{p['id']}]" in answer['answer'] for p in expected)
+    assert all(c['source_kind'] == 'demo_product_record' for c in answer['citations'])
+    assert 'wind' not in answer['answer'].lower()
+
+
+def test_company_offer_question_covers_both_ranges_and_smart_layer():
+    answer = knowledge.answer_question('What Royal Blinds offer?')
+    assert answer['generation_mode'] == 'catalog'
+    assert all(p['name'] in answer['answer'] for p in knowledge.DATA['products'])
+    assert 'Smart Solutions' in answer['answer']
+    assert 'compatibility must be confirmed' in answer['answer']
+
+
+def test_indoor_listing_and_explicit_filters_still_apply():
+    answer = knowledge.answer_question('Which indoor products are listed?')
+    assert len(answer['citations']) == 8
+    assert all(c['category'] == 'internal' for c in answer['citations'])
+    answer = knowledge.answer_question('List all products', 'external')
+    assert len(answer['citations']) == 7
+    assert knowledge.answer_question('What outdoor shade products are listed?', 'internal')['generation_mode'] != 'catalog'
+    assert knowledge.answer_question('List all products', 'external', 'awnings')['generation_mode'] != 'catalog'
+
+
+@pytest.mark.parametrize('question', ['Which outdoor products are compatible with Alexa?',
+                                    'List outdoor products with current prices and stock'])
+def test_catalog_intent_cannot_bypass_missing_technical_or_live_evidence(question):
+    assert knowledge.answer_question(question)['generation_mode'] == 'evidence_gap'
+
+
+def test_offline_excerpts_are_concise_original_sentences_with_full_details(monkeypatch):
+    chunk = knowledge.CHUNK_MAP['RB-SMART-03']
+    repeated = {**chunk, 'content': 'Unrelated introduction. Battery operation is described. Battery operation is described. Unrelated conclusion.'}
+    monkeypatch.setattr(knowledge, 'retrieve', lambda *args, **kwargs: {
+        'citations': [repeated], 'retrieval_mode': 'local_keyword', 'knowledge_source': 'demo', 'warning': None,
+    })
+    answer = knowledge.answer_question('battery operation', 'smart')
+    assert answer['answer'] == '"Battery operation is described." [RB-SMART-03]'
+    assert answer['citations'][0]['content'] == repeated['content']
+
+
 def test_product_filter_does_not_retrieve_other_product_listings():
     rows = knowledge.local_search('pergola awnings', 'external', 'bioclimatic_pergolas')
     assert any(c['id'] == 'RB-PRODUCT-bioclimatic_pergolas' for c in rows)
@@ -141,6 +200,20 @@ def test_valid_generated_answer_is_labeled_as_rag(monkeypatch):
     result = knowledge.answer_question('battery or mains power', 'smart')
     assert result['generation_mode'] == 'llm'
     assert '[RB-SMART-03]' in result['answer']
+
+
+def test_model_cannot_hide_additional_inline_sources(monkeypatch):
+    monkeypatch.setenv('LLM_API_KEY', 'not-a-real-key')
+    retrieved = [knowledge.CHUNK_MAP['RB-SMART-03'], knowledge.CHUNK_MAP['RB-SMART-04']]
+    monkeypatch.setattr(knowledge, 'retrieve', lambda *args, **kwargs: {
+        'citations': retrieved, 'retrieval_mode': 'local_keyword', 'knowledge_source': 'demo', 'warning': None,
+    })
+    monkeypatch.setattr(knowledge, 'structured_chat', lambda *args: knowledge.GroundedAnswer(
+        answer='Some answer [RB-SMART-03] [RB-SMART-04]', cited_chunk_ids=['RB-SMART-03']))
+    answer = knowledge.answer_question('battery power')
+    assert answer['generation_mode'] == 'extractive_fallback'
+    assert answer['generation_warning']
+    assert 'Some answer' not in answer['answer']
 
 
 def test_api_portfolio_and_source_search_validation():
