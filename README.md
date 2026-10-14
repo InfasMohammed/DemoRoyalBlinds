@@ -217,6 +217,12 @@ Live OpenAI, NVIDIA and Supabase integration need your configured accounts and w
 
 ## Product knowledge and RAG
 
+The page header follows the current task: **New quotation** in Project studio, **Add knowledge** in Product knowledge, and **Add material** in Material library. Project reports and Agent workflow have no creation button. Adding knowledge or materials requires Supabase business data; offline fixtures are never modified by these forms.
+
+**Add knowledge** saves reviewed title/section text, category, source URL and optional related products in `company_knowledge_chunks`, tagged `user_added_content`. New entries appear in the source register and are immediately eligible for keyword retrieval. Embeddings are not invented or generated during a save; run the existing indexing script before using new passages in vector search. **Add material** saves SKU, roll width, opening on-hand stock, recorded cost, supplier lead time, finish, colour, source and compatible manufacturing profiles in `inventory_materials`. The library reloads after saving and future quotations use the new record. Existing reports keep their original snapshots.
+
+The backend validates required fields, numeric values and product references before insertion. A stable request ID makes retrying the same form safe after a lost response; conflicting IDs/SKUs never overwrite existing records. New endpoints are `POST /api/knowledge/entries` and `POST /api/materials`; the existing database schema already supports them, so this change needs no new SQL migration. Server credentials stay in the backend.
+
 Open **Product knowledge** in the dashboard. The supplied portfolio has eight internal product types (roller, Venetian, wooden, vertical, Roman, zebra roller, curtains and cubicle curtains) and seven external types (car parking shades, sail shades, bioclimatic pergolas, tensile shade structures, awnings, outdoor furniture and umbrellas). Smart Solutions is an automation/control layer across applicable products; universal compatibility is not assumed.
 
 Ask questions directly in the assistant; no source or product selection is required. Portfolio category filters affect browsing only. Product cards can open a focused source enquiry, but subsequent typed questions search all knowledge areas without retaining that context.

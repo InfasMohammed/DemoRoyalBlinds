@@ -7,6 +7,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight, BadgeCheck, Box, CalendarDays, Che
 import { api } from './api'
 import KnowledgeStudio from './KnowledgeStudio'
 import ExecutionPanel from './ExecutionPanel'
+import RecordDialog from './RecordDialog'
 import type { Catalog, Health, ProjectInput, Report } from './types'
 
 const money = (value: number) => new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
@@ -48,6 +49,10 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [creating, setCreating] = useState<'knowledge' | 'material' | null>(null)
+  const [recordSaving, setRecordSaving] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [knowledgeVersion, setKnowledgeVersion] = useState(0)
 
   async function load() {
     setError('')
@@ -68,13 +73,13 @@ export default function App() {
   useEffect(() => { void load() }, [])
 
   useEffect(() => {
-    if (!editing && !approving) return
+    if (!editing && !approving && !creating) return
     const previous = document.activeElement as HTMLElement | null
     const modal = document.querySelector<HTMLElement>('.modal')
     const elements = () => Array.from(modal?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select, textarea, [tabindex="0"]') || [])
     elements()[0]?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) { setEditing(false); setApproving(false) }
+      if (event.key === 'Escape' && !busy && !recordSaving) { setEditing(false); setApproving(false); setCreating(null) }
       if (event.key !== 'Tab') return
       const focusable = elements(), first = focusable[0], last = focusable.at(-1)
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
@@ -84,7 +89,13 @@ export default function App() {
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; previous?.focus() }
-  }, [editing, approving, busy])
+  }, [editing, approving, busy, creating, recordSaving])
+
+  function recordSaved(message: string) {
+    setCreating(null); setNotice(message)
+    setKnowledgeVersion(value => value + 1)
+    void api<Catalog>('/catalog').then(setCatalog).catch(err => setError(`The record was saved, but refreshing the catalog failed: ${err.message}`))
+  }
 
   function newProject(scenario = 'shortage') {
     if (!health || !catalog) return
@@ -177,13 +188,15 @@ export default function App() {
       </header>
       <main>
         {error && <div role="alert" className="error-banner no-print"><CircleAlert size={18} /><span>{error}</span><button onClick={() => void load()}>Retry connection</button><button aria-label="Dismiss error" onClick={() => setError('')}><X size={16} /></button></div>}
+        {notice && <div className="record-success no-print" role="status"><CheckCircle2 size={18} /><span>{notice}</span><button className="icon-button" aria-label="Dismiss saved notification" onClick={() => setNotice('')}><X size={16} /></button></div>}
         <div className="page-heading no-print"><div><div className="eyebrow">MANUFACTURING INTELLIGENCE</div><h1>{({ workspace: 'From brief to better execution.', knowledge: 'Product expertise, with evidence.', projects: 'Every project. Every decision.', inventory: 'The right material, in view.', workflow: 'A team of focused specialists.' } as Record<string, string>)[page]}</h1>
           <p>{({ workspace: 'Plan blinds and curtains with a transparent, coordinated workflow.', knowledge: 'Explore the complete supplied portfolio and retrieve source-linked answers.', projects: 'Revisit saved estimates, evidence and review decisions.', inventory: 'Material availability, recorded costs and supplier lead times.', workflow: 'See how LangGraph connects calculations, evidence and human review.' } as Record<string, string>)[page]}</p></div>
-          <button className="button primary" onClick={() => newProject()} disabled={!health || !catalog || busy}><Plus size={17} />New project</button>
+          {page === 'workspace' && <button className="button primary" onClick={() => newProject()} disabled={!health || !catalog || busy}><Plus size={17} />New quotation</button>}
+          {(page === 'knowledge' || page === 'inventory') && <button className="button primary" disabled={!catalog || busy} onClick={() => { setNotice(''); setCreating(page === 'knowledge' ? 'knowledge' : 'material') }}><Plus size={17} />{page === 'knowledge' ? 'Add knowledge' : 'Add material'}</button>}
         </div>
         <div className="demo-strip no-print"><span><span className="pill neutral">INTERVIEW DEMO</span>{catalog?.is_sample === false ? 'Configured business records. Human review required.' : 'Sample inventory, rates and capacity.'}</span><span>{catalog?.data_source === 'supabase' ? 'Supabase business data' : 'Offline demo data'}<span className="dot-separator">·</span>{health ? modeLabel(health.reasoning_mode) : 'Checking runtime'}<span className="dot-separator">·</span>{health ? health.storage_mode === 'supabase' ? 'Supabase storage' : 'Local demo storage' : 'Storage unverified'}</span></div>
 
-        {page === 'knowledge' && <KnowledgeStudio quoteReady={!!health && !!catalog && !busy} onQuote={product => {
+        {page === 'knowledge' && <KnowledgeStudio refreshVersion={knowledgeVersion} quoteReady={!!health && !!catalog && !busy} onQuote={product => {
           if (!health || !catalog) return
           const next = seed(health.today, catalog, 'ready')
           setInput({ ...next, product, brief: `Supply and install ${catalog.products[product]?.name || product}. Confirm the fabric sample, measurements and delivery before approval.` })
@@ -249,7 +262,7 @@ export default function App() {
           ].map((stage, i) => <div className="timeline-item" key={stage.label}><div className="timeline-marker">{i + 1}</div><div><h4>{stage.label}</h4><p>{stage.detail}</p></div><strong>{day(stage.date)}</strong></div>)}<div className="inline-warning"><CalendarDays size={17} /> This is a capacity estimate, not a committed production booking.</div></section><section className="card assumptions"><h3>Scheduling assumptions</h3><ul className="simple-list">{report.production.assumptions.map(item => <li key={item}>{item}</li>)}</ul><p className="fine-print">Plan calculated as of {day(report.production.as_of)}, Dubai time.</p></section></div><section className="card quality-card"><div className="section-heading"><h3>Quality & site checklist</h3><ClipboardCheck size={20} /></div><p className="muted">Proposed checks for the reviewer and installation team.</p>{report.quality.checklist.map(item => <div className="checklist-item" key={item}><span className="empty-check" /><span>{item}</span></div>)}<p className="fine-print">{report.quality.note}</p></section></div>}
         </>)}
 
-        {page === 'projects' && <section className="card projects-card"><div className="section-heading"><h3>Saved project reports</h3><span className="pill neutral">{reports.length} reports · latest 50</span></div>{!reports.length ? <div className="empty-state"><Layers3 size={34} /><h3>Your first project starts here.</h3><p>Analyze a brief to save a report and its complete agent evidence.</p><button className="button primary" disabled={!health || !catalog} onClick={() => newProject()}>Create project <Plus size={16} /></button></div> : <div className="table-scroll"><table><thead><tr><th>Project / customer</th><th>Estimate (AED)</th><th>Completion</th><th>Review status</th><th /></tr></thead><tbody>{reports.map(item => <tr key={item.id}><td><strong>{item.request.project_name}</strong><small>{item.request.customer} · {item.id.slice(0, 8)}</small></td><td>{money(item.costing.total)}</td><td>{day(item.production.completion_date)}</td><td><span className={`pill ${item.status === 'blocked' ? 'amber' : 'green'}`}>{statusLabel(item.status)}</span></td><td><button className="text-link" onClick={() => openReport(item)}>Open <ArrowUpRight size={16} /></button></td></tr>)}</tbody></table></div>}</section>}
+        {page === 'projects' && <section className="card projects-card"><div className="section-heading"><h3>Saved project reports</h3><span className="pill neutral">{reports.length} reports · latest 50</span></div>{!reports.length ? <div className="empty-state"><Layers3 size={34} /><h3>Your first report starts in Project studio.</h3><p>Analyze a quotation brief in Project studio to save its report and complete agent evidence here.</p></div> : <div className="table-scroll"><table><thead><tr><th>Project / customer</th><th>Estimate (AED)</th><th>Completion</th><th>Review status</th><th /></tr></thead><tbody>{reports.map(item => <tr key={item.id}><td><strong>{item.request.project_name}</strong><small>{item.request.customer} · {item.id.slice(0, 8)}</small></td><td>{money(item.costing.total)}</td><td>{day(item.production.completion_date)}</td><td><span className={`pill ${item.status === 'blocked' ? 'amber' : 'green'}`}>{statusLabel(item.status)}</span></td><td><button className="text-link" onClick={() => openReport(item)}>Open <ArrowUpRight size={16} /></button></td></tr>)}</tbody></table></div>}</section>}
 
         {page === 'inventory' && <><div className="inventory-heading"><span className="pill neutral">{catalog?.fabrics.length ?? 0} material records · {catalog?.data_source === 'supabase' ? 'Supabase' : 'Offline demo'}</span><p>Analysis does not reserve or reduce stock.</p><button className="button secondary" onClick={() => void load()}>Refresh records</button></div><div className="scenario-grid">{catalog?.fabrics.map(fabric => <section className="card fabric-card" key={fabric.id}><div className={`fabric-swatch large ${fabric.id}`} /><span className="eyebrow">{fabric.sku}</span><h3>{fabric.name}</h3><p className="muted">{fabric.color} · {fabric.transmission}</p><dl><dt>Available</dt><dd>{fabric.stock_lm.toFixed(2)} lm</dd><dt>On hand / reserved</dt><dd>{(fabric.on_hand_lm ?? fabric.stock_lm).toFixed(2)} / {(fabric.reserved_lm ?? 0).toFixed(2)} lm</dd><dt>Roll width</dt><dd>{fabric.roll_width_m} m</dd><dt>Recorded cost</dt><dd>AED {money(fabric.cost_per_lm)} / lm</dd><dt>Replenishment</dt><dd>{fabric.lead_days} calendar days</dd></dl><p className="fine-print">{fabric.source}</p></section>)}</div><section className="card assumptions"><h3>Material calculations you can explain</h3><p>Product records supply cutting allowances and curtain fullness. The estimating policy supplies waste ({(catalog?.policy.waste_fraction ?? 0) * 100}%). Agents check compatibility and whole-panel yield using those records.</p></section></>}
 
@@ -262,7 +275,8 @@ export default function App() {
         <footer className="page-footer"><span>Royal Blinds · Independent interview prototype</span><span>Python / FastAPI / LangGraph / React / Node.js / Supabase</span></footer>
       </main>
     </div>
-    {editing && input && catalog && <div className="modal-backdrop no-print"><section className="modal project-modal" role="dialog" aria-modal="true" aria-labelledby="brief-title"><div className="modal-heading"><div><span className="eyebrow">PROJECT INTAKE</span><h2 id="brief-title">Give your specialists a brief.</h2></div><button className="icon-button" aria-label="Close project form" onClick={() => setEditing(false)}><X size={20} /></button></div><p className="muted">Structured fields drive calculations. Use synthetic customer details in this demo.</p>{error && <div className="inline-warning" role="alert">{error}</div>}
+    {creating && catalog && <RecordDialog kind={creating} catalog={catalog} databaseEnabled={catalog.data_source === 'supabase'} onClose={() => setCreating(null)} onSaved={recordSaved} onSaving={setRecordSaving} />}
+    {editing && input && catalog && <div className="modal-backdrop no-print"><section className="modal project-modal" role="dialog" aria-modal="true" aria-labelledby="brief-title"><div className="modal-heading"><div><span className="eyebrow">PROJECT INTAKE</span><h2 id="brief-title">Create a new quotation.</h2></div><button className="icon-button" aria-label="Close project form" onClick={() => setEditing(false)}><X size={20} /></button></div><p className="muted">Structured fields drive calculations. Use synthetic customer details in this demo.</p>{error && <div className="inline-warning" role="alert">{error}</div>}
       <form onSubmit={event => void analyze(event)}><div className="form-grid"><label>Project name<input required minLength={2} maxLength={120} value={input.project_name} onChange={e => setInput({ ...input, project_name: e.target.value })} /></label><label>Customer / organization<input required minLength={2} maxLength={100} value={input.customer} onChange={e => setInput({ ...input, customer: e.target.value })} /></label><label>Product<select value={input.product} onChange={e => setInput({ ...input, product: e.target.value as ProjectInput['product'] })}>{Object.entries(catalog.products).map(([id, value]) => <option value={id} key={id}>{value.name}</option>)}</select></label><label>Fabric<select value={input.fabric_id} onChange={e => setInput({ ...input, fabric_id: e.target.value as ProjectInput['fabric_id'] })}>{catalog.fabrics.map(f => <option value={f.id} key={f.id}>{f.name} · {f.stock_lm} lm</option>)}</select></label></div><div className="form-grid three"><label>Openings<input type="number" required min={1} max={500} value={input.quantity} onChange={e => setInput({ ...input, quantity: Number(e.target.value) })} /></label><label>Width per opening (m)<input type="number" step="0.01" required min={0.3} max={4} value={input.width_m} onChange={e => setInput({ ...input, width_m: Number(e.target.value) })} /></label><label>Height per opening (m)<input type="number" step="0.01" required min={0.5} max={5} value={input.height_m} onChange={e => setInput({ ...input, height_m: Number(e.target.value) })} /></label></div><div className="form-grid"><label>Installation site<input required minLength={2} maxLength={160} value={input.site} onChange={e => setInput({ ...input, site: e.target.value })} /></label><label>Requested completion<input type="date" required min={health?.today} value={input.due_date} onChange={e => setInput({ ...input, due_date: e.target.value })} /></label></div><label>Customer brief<textarea required minLength={10} maxLength={4000} rows={3} value={input.brief} onChange={e => setInput({ ...input, brief: e.target.value })} /></label><div className="form-note"><ShieldCheck size={16} />Dimensions are provisional. This workflow never places a real order.</div><div className="modal-actions"><button className="button secondary" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="button primary" type="submit" disabled={busy}><Sparkles size={17} />Analyze project</button></div></form></section></div>}
     {approving && report && <div className="modal-backdrop no-print"><section className="modal approval-modal" role="dialog" aria-modal="true" aria-labelledby="review-title"><div className="modal-heading"><div><span className="eyebrow">HUMAN REVIEW</span><h2 id="review-title">Review the demo estimate.</h2></div><button className="icon-button" aria-label="Close review" onClick={() => setApproving(false)}><X size={20} /></button></div><p>AED {money(report.costing.total)} · {report.request.project_name}</p>{error && <div className="inline-warning" role="alert">{error}</div>}<form onSubmit={event => void approve(event)}><label>Reviewer name<input name="reviewer" required minLength={2} maxLength={100} placeholder="Your name" /></label><div className="approval-checks"><label><input type="checkbox" name="measurements" required />I reviewed the sample measurements and survey assumptions.</label><label><input type="checkbox" name="specification" required />I reviewed the product, fabric and installation checklist.</label><label><input type="checkbox" name="commercial" required />I reviewed the cost breakdown, deadline and exclusions.</label><label><input type="checkbox" name="execution" required />I authorize demo material reservation and work-order creation.</label></div><div className="info-note"><ShieldCheck size={20} /><p>Approval starts the demo workflow: reserve material, book capacity and create a work order. Factory progress is recorded separately.</p></div><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setApproving(false)}>Cancel</button><button className="button primary" disabled={busy}><BadgeCheck size={17} />Approve demo estimate</button></div></form></section></div>}
     {busy && <div className="busy-overlay no-print" role="status" aria-live="polite"><div className="card"><LoaderCircle size={32} className="spin" /><h3>{approving ? 'Recording your review…' : 'Your specialists are working…'}</h3><p>{approving ? 'Saving the demo approval.' : 'LangGraph is evaluating the project and collecting evidence.'}</p><span>{health?.reasoning_mode === 'live_ai_configured' ? 'AI commentary may take a moment.' : 'Running validated manufacturing tools.'}</span></div></div>}

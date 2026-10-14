@@ -19,6 +19,7 @@ from .llm import chat_info
 from .store import ReportStore, StorageUnavailable
 from .workflow import llm_enabled, run_workflow
 from .execution import ApprovalWorker, run_post_approval
+from .record_creation import CreationUnavailable, RecordConflict, MaterialCreate, KnowledgeCreate, create_material, create_knowledge
 
 if os.getenv('DATA_MODE', 'demo') != 'demo':
     raise RuntimeError('Only DATA_MODE=demo is supported. Connect verified business data in a separate production implementation.')
@@ -47,6 +48,7 @@ chat_info()  # Validate endpoint/model settings at startup without making reques
 
 @app.exception_handler(BusinessDataUnavailable)
 @app.exception_handler(StorageUnavailable)
+@app.exception_handler(CreationUnavailable)
 async def storage_error(request, exc):
     return JSONResponse(status_code=503, content={'detail': str(exc)})
 
@@ -63,6 +65,26 @@ def health():
 @app.get('/api/catalog')
 def catalog():
     return load_operations()
+
+
+@app.post('/api/materials', status_code=201)
+def add_material(request: MaterialCreate):
+    try:
+        return create_material(request)
+    except RecordConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/knowledge/entries', status_code=201)
+def add_knowledge(request: KnowledgeCreate):
+    try:
+        return create_knowledge(request)
+    except RecordConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @app.get('/api/knowledge/portfolio')

@@ -54,6 +54,35 @@ def test_full_migration_and_service_role_snapshot_permissions(pg):
             pg.execute('reset role')
 
 
+def test_added_material_and_knowledge_are_visible_with_service_role_permissions(pg):
+    pg.execute('set role service_role')
+    try:
+        pg.execute("""insert into public.inventory_materials
+            (id,name,sku,roll_width_m,stock_lm,cost_per_lm,lead_days,transmission,color,compatible,source)
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            ('mat_added_test', 'Added demo fabric', 'ADDED-TEST-SKU', 2.8, 17.25, 35, 4,
+             'Blackout', 'Ivory', ['manual_roller'], 'Demo supplier quote'))
+        pg.execute("""insert into public.company_knowledge_chunks
+            (id,document_id,title,heading,category,product_ids,content,source_url,source_kind,captured_on)
+            values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            ('RB-USER-added-test', 'RB-USER-added-test', 'Added source', 'Consultation', 'company', [],
+             'The ultramarine showroom protocol covers panel consultations.',
+             'https://royalblinds.com/showroom-guide/', 'user_added_content', date(2026, 10, 14)))
+        operations = pg.execute('select public.get_operations_snapshot()').fetchone()[0]
+        added = next(f for f in operations['fabrics'] if f['id'] == 'mat_added_test')
+        assert added['stock_lm'] == added['on_hand_lm'] == 17.25
+        assert added['reserved_lm'] == 0
+        corpus = pg.execute('select public.get_company_knowledge_snapshot()').fetchone()[0]
+        passage = next(c for c in corpus['chunks'] if c['id'] == 'RB-USER-added-test')
+        assert passage['source_kind'] == 'user_added_content'
+        assert 'ultramarine' in passage['content']
+        assert pg.execute("select embedding is null from public.company_knowledge_chunks where id='RB-USER-added-test'").fetchone()[0]
+    finally:
+        pg.execute('reset role')
+        pg.execute("delete from public.company_knowledge_chunks where id='RB-USER-added-test'")
+        pg.execute("delete from public.inventory_materials where id='mat_added_test'")
+
+
 def test_migration_rerun_preserves_stock_rates_text_and_reports(pg):
     original = pg.execute("select content from public.company_knowledge_chunks where id='RB-SMART-03'").fetchone()[0]
     pg.execute("update public.inventory_materials set stock_lm=155 where id='linen_blackout'")

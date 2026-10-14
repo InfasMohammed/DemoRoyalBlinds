@@ -16,7 +16,7 @@ type Answer = { question: string; answer: string; citations: Citation[]; generat
   retrieval_mode: string; needs_review: boolean; warning: string | null; provenance: string; knowledge_source?: string;
   generation_warning?: string | null }
 
-export default function KnowledgeStudio({ onQuote, quoteReady }: { onQuote: (product: ProjectInput['product']) => void; quoteReady: boolean }) {
+export default function KnowledgeStudio({ onQuote, quoteReady, refreshVersion = 0 }: { onQuote: (product: ProjectInput['product']) => void; quoteReady: boolean; refreshVersion?: number }) {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [category, setCategory] = useState('')
   const [question, setQuestion] = useState('What outdoor shade products does Royal Blinds offer?')
@@ -28,7 +28,7 @@ export default function KnowledgeStudio({ onQuote, quoteReady }: { onQuote: (pro
     try { setPortfolio(await api<Portfolio>('/knowledge/portfolio')); setError('') }
     catch (err) { setError((err as Error).message) }
   }
-  useEffect(() => { void load() }, [])
+  useEffect(() => { setAnswer(null); void load() }, [refreshVersion])
 
   async function ask(event?: FormEvent, replacement?: { question: string; category?: string; product_id?: string }) {
     event?.preventDefault(); setBusy(true); setError('')
