@@ -31,6 +31,7 @@ export default function KnowledgeStudio({
 }) {
   const [portfolio, setPortfolio] = useState<KnowledgePortfolio | null>(null)
   const [category, setCategory] = useState('')
+  const [answerCategory, setAnswerCategory] = useState('')
   const [question, setQuestion] = useState('What outdoor shade products does Royal Blinds offer?')
   const [answer, setAnswer] = useState<KnowledgeAnswer | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,7 +54,7 @@ export default function KnowledgeStudio({
     event?.preventDefault()
     setBusy(true)
     setError('')
-    const values = replacement || { question }
+    const values = replacement || { question, category: answerCategory }
     try {
       setAnswer(
         await api<KnowledgeAnswer>('/knowledge/ask', {
@@ -72,6 +73,7 @@ export default function KnowledgeStudio({
     }
   }
   function explore(product: KnowledgeProduct) {
+    setAnswerCategory('')
     const query = {
       question: `What does the supplied website say about ${product.name}?`,
       category: product.category,
@@ -85,6 +87,7 @@ export default function KnowledgeStudio({
     ...Object.fromEntries((portfolio?.categories || []).map((item) => [item.id, item.name])),
   }
   const answerModeNames: Record<string, string> = {
+    company_profile: 'Company facts',
     catalog: 'Catalog answer',
     llm: 'RAG answer',
     extractive: 'Source excerpts',
@@ -93,6 +96,7 @@ export default function KnowledgeStudio({
     no_evidence: 'No evidence',
   }
   const retrievalModeNames: Record<string, string> = {
+    company_profile: 'Company profile lookup',
     product_catalog: 'Complete product catalog lookup',
     supabase_vector: 'Supabase vector retrieval',
     local_keyword: 'Local keyword retrieval',
@@ -126,14 +130,14 @@ export default function KnowledgeStudio({
       <section className="card knowledge-assistant">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">SOURCE-LINKED PRODUCT DISCOVERY</span>
+            <span className="eyebrow">COMPANY & PRODUCT KNOWLEDGE</span>
             <h3>Ask the knowledge assistant</h3>
           </div>
           <Sparkles size={20} />
         </div>
         <form onSubmit={(event) => void ask(event)}>
           <label htmlFor="knowledge-question">
-            Your product question
+            Your question
             <textarea
               id="knowledge-question"
               rows={2}
@@ -145,14 +149,34 @@ export default function KnowledgeStudio({
             />
           </label>
           <div className="knowledge-controls">
+            <label className="answer-category">
+              Category (optional)
+              <select
+                value={answerCategory}
+                onChange={(event) => setAnswerCategory(event.target.value)}
+                disabled={busy || !portfolio}
+              >
+                <option value="">All categories</option>
+                <option value="company">Company profile</option>
+                {portfolio?.categories.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button className="button primary" disabled={busy || !portfolio} type="submit">
               {busy ? <LoaderCircle className="spin" size={17} /> : <Search size={17} />}
               {busy ? 'Retrieving sources…' : 'Find an answer'}
             </button>
           </div>
+          <p className="fine-print">
+            Search all sources automatically, or narrow your question to one category.
+          </p>
         </form>
         <div className="knowledge-examples">
           {[
+            { text: 'Company ownership', query: 'Who is the owner of the company?' },
             { text: 'Outdoor product range', query: 'What outdoor shade products are listed?' },
             {
               text: 'Phone & battery controls',
@@ -168,6 +192,7 @@ export default function KnowledgeStudio({
               disabled={busy || !portfolio}
               key={item.text}
               onClick={() => {
+                setAnswerCategory('')
                 setQuestion(item.query)
                 void ask(undefined, { question: item.query })
               }}
@@ -288,6 +313,7 @@ export default function KnowledgeStudio({
                     product_id: '',
                   }
                   setQuestion(q.question)
+                  setAnswerCategory('')
                   void ask(undefined, q)
                 }}
               >

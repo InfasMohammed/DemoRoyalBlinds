@@ -8,7 +8,7 @@ test('full portfolio, source retrieval and engineering evidence gap', async ({ p
   await expect(
     page.getByRole('heading', { name: 'Product expertise, with evidence.' }),
   ).toBeVisible()
-  await expect(page.locator('.knowledge-assistant select')).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'Category (optional)' })).toHaveValue('')
   await expect(page.locator('.portfolio-card')).toHaveCount(15)
   await page.getByRole('button', { name: 'External Shades', exact: true }).click()
   await expect(page.locator('.portfolio-card')).toHaveCount(7)
@@ -45,7 +45,7 @@ test('full portfolio, source retrieval and engineering evidence gap', async ({ p
   )
   await expect(page.getByRole('button', { name: 'Find an answer' })).toBeEnabled()
   await page
-    .getByLabel('Your product question')
+    .getByLabel('Your question')
     .fill('Can motorized roller blinds use rechargeable battery or mains power?')
   const request = page.waitForRequest(
     (request) => request.url().endsWith('/api/knowledge/ask') && request.method() === 'POST',
@@ -95,4 +95,48 @@ test('knowledge explorer remains usable on mobile', async ({ page }) => {
   await page.getByRole('button', { name: 'Smart Solutions', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Smartphone control', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
+})
+
+test('company questions work automatically and Q&A categories are independent of portfolio filters', async ({
+  page,
+}) => {
+  const payloads: { question: string; category: string | null; product_id: string | null }[] = []
+  page.on('request', (req) => {
+    if (req.url().endsWith('/api/knowledge/ask') && req.method() === 'POST')
+      payloads.push(req.postDataJSON())
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Product knowledge', exact: true }).click()
+  const filter = page.getByRole('combobox', { name: 'Category (optional)' })
+  await expect(filter).toBeEnabled()
+  await page.getByRole('button', { name: 'External Shades', exact: true }).click()
+  await page.getByLabel('Your question').fill('Who is the owner of the company?')
+  await page.getByRole('button', { name: 'Find an answer' }).click()
+  await expect(page.locator('.answer-body')).toContainText('Al Jallaf Family')
+  await expect(page.getByText('Company facts', { exact: true })).toBeVisible()
+  expect(payloads.at(-1)?.category).toBeNull()
+  await filter.selectOption('company')
+  await page.getByLabel('Your question').fill('give me the location of company')
+  await page.getByRole('button', { name: 'Find an answer' }).click()
+  await expect(page.locator('.answer-body')).toContainText('Al Quoz')
+  await expect(page.locator('.answer-body')).toContainText('Abu Dhabi')
+  expect(payloads.at(-1)?.category).toBe('company')
+  await filter.selectOption('smart')
+  await page
+    .getByLabel('Your question')
+    .fill('Can motorized roller blinds use rechargeable battery power?')
+  await page.getByRole('button', { name: 'Find an answer' }).click()
+  await expect(page.locator('.answer-body')).toContainText('rechargeable battery')
+  expect(payloads.at(-1)?.category).toBe('smart')
+  expect(payloads.at(-1)?.product_id).toBeNull()
+  await filter.selectOption('internal')
+  await page.getByLabel('Your question').fill('Who owns the company?')
+  await page.getByRole('button', { name: 'Find an answer' }).click()
+  await expect(page.locator('.answer-body')).toContainText(
+    'Select All categories or Company profile',
+  )
+  await page.getByRole('button', { name: 'Company ownership', exact: true }).click()
+  await expect(page.locator('.answer-body')).toContainText('Al Jallaf Family')
+  await expect(filter).toHaveValue('')
+  await expect(page.locator('.portfolio-card')).toHaveCount(7)
 })

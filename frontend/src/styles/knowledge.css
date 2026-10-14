@@ -24,10 +24,18 @@
 }
 .knowledge-controls {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 10px;
 }
-.knowledge-controls .button {
-  margin-bottom: 18px;
+.answer-category {
+  width: 240px;
+  max-width: 100%;
+  margin: 0;
+}
+.answer-category select {
+  width: 100%;
 }
 .knowledge-examples {
   display: flex;
@@ -318,6 +326,13 @@
     padding: 20px;
   }
   .knowledge-controls .button {
+    width: 100%;
+  }
+  .knowledge-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .answer-category {
     width: 100%;
   }
   .knowledge-citations {

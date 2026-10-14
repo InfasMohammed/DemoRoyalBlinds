@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from supabase import create_client
 
 from .business_data import data_source, load_database_knowledge
+from .company_knowledge import company_answer
 from .llm import (
     OPENAI_URL,
     CitationValidationError,
@@ -336,6 +337,21 @@ def answer_question(question, category=None, product_id=None):
             "limitations": corpus["limitations"],
             "provenance": corpus["provenance"],
             "generation_warning": None,
+        }
+    # Direct company facts use current answer-bearing source sentences. This
+    # works independently of embeddings/provider availability and cannot let
+    # an unrelated enquiry win solely because it repeats "company".
+    company = (
+        None
+        if TECHNICAL_GAP.search(question)
+        else company_answer(question, category, product_id, corpus)
+    )
+    if company:
+        return {
+            **company,
+            "question": question,
+            "limitations": corpus["limitations"],
+            "provenance": corpus["provenance"],
         }
     findings = retrieve(question, category, product_id, corpus=corpus)
     citations = findings["citations"]

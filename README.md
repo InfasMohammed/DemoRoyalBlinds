@@ -32,6 +32,7 @@ backend/app/
   local_execution.py   Offline work-order transactions
   business_data.py     Validated business and knowledge snapshots
   knowledge.py         Retrieval, catalogue answers and citation grounding
+  company_knowledge.py Company-topic detection and current source fact lookup
   llm.py               Provider adapters and response validation
   record_creation.py   Validated, retry-safe material and knowledge creation
   store.py             Supabase and local report persistence
@@ -271,7 +272,11 @@ The backend validates required fields, numeric values and product references bef
 
 Open **Product knowledge** in the dashboard. The supplied portfolio has eight internal product types (roller, Venetian, wooden, vertical, Roman, zebra roller, curtains and cubicle curtains) and seven external types (car parking shades, sail shades, bioclimatic pergolas, tensile shade structures, awnings, outdoor furniture and umbrellas). Smart Solutions is an automation/control layer across applicable products; universal compatibility is not assumed.
 
-Ask questions directly in the assistant; no source or product selection is required. Portfolio category filters affect browsing only. Product cards can open a focused source enquiry, but subsequent typed questions search all knowledge areas without retaining that context.
+Ask questions directly in the assistant. The optional **Category** selector defaults to **All categories** and can narrow a question to Company profile, Internal Shades, External Shades or Smart Solutions. Portfolio category buttons affect browsing independently. Product cards open a focused source enquiry; example/card actions clear the optional Q&A filter, and their product ID is not retained for subsequent typed questions. A manually selected Q&A category stays active until changed or cleared.
+
+Basic company questions recognize ownership, contacts, email/telephone, locations, founding date and history. They select answer-bearing sentences from the current company-profile passages and show exact cited text, labeled **Company facts / Company profile lookup**. This is a deterministic source lookup, independent of the model and vector index. Values and source IDs come from the current database snapshot; there are no hardcoded owners, addresses or contact values. Product drafts/enquiries cannot replace company facts even when misfiled in the company category. If the selected category excludes company sources, the answer asks you to choose All categories or Company profile. Missing ownership/founder information is reported as missing; an owner is never inferred to be a founder.
+
+When adding company facts, use Company profile with an informative title/heading such as Company ownership, Contact details or Office locations. Put product enquiries such as indoor wood decoration under Internal Shades. This change reads existing records and requires no SQL migration or reindexing for company facts.
 
 The source register links company, internal, external and smart content to its supplied URLs and section headings. Individual linked product titles are included as listing evidence only. Original seed evidence is in [backend/app/data/company_knowledge.json](backend/app/data/company_knowledge.json). Database mode reads current passages and metadata from Supabase; offline mode uses this seed corpus. `backend/app/knowledge.py` ranks the selected corpus.
 
@@ -286,6 +291,8 @@ The third enquiry deliberately flags an evidence gap. Marketing copy cannot conf
 Retrieval and generation are separate:
 
 Product-range questions (for example, “What outdoor shade products are listed?”) use a complete lookup of the current `company_products` catalog in Supabase mode, or the seed catalog offline. They return a concise list with citations to product records, labeled **Catalog answer**. This deterministic lookup is distinct from LLM RAG and avoids omitting products because passage retrieval has a top-k limit. Broad company-offering questions include both product ranges and the Smart Solutions area description. Catalog evidence establishes membership only; technical and live-data questions still require appropriate records.
+
+Basic company facts use the separate source-sentence lookup described above. The following retrieval/generation modes apply to remaining questions; technical/live-data evidence gates and generated-answer citation validation remain in place.
 
 | Configuration | Actual behavior |
 |---|---|
