@@ -10,6 +10,23 @@ from app import knowledge, llm, workflow
 from app.models import AgentNarrative, ProjectRequest
 
 
+def stream_response(content, finish_reason='stop'):
+    def event(choices):
+        return ('data: ' + json.dumps({
+            'id': 'chatcmpl-demo', 'object': 'chat.completion.chunk', 'created': 0,
+            'model': 'openai/gpt-oss-20b', 'choices': choices,
+        }) + '\n\n').encode()
+
+    frames = [event([]), event([{'index': 0, 'finish_reason': None,
+                               'delta': {'role': 'assistant', 'reasoning_content': 'PRIVATE_REASONING'}}])]
+    for position in range(0, len(content), 7):
+        frames.append(event([{'index': 0, 'finish_reason': None, 'delta': {'content': content[position:position + 7]}}]))
+    if finish_reason is not None:
+        frames.append(event([{'index': 0, 'finish_reason': finish_reason, 'delta': {}}]))
+    frames.append(b'data: [DONE]\n\n')
+    return httpx.Response(200, headers={'content-type': 'text/event-stream'}, content=b''.join(frames))
+
+
 @pytest.fixture(autouse=True)
 def nvidia_settings(monkeypatch):
     monkeypatch.setenv('LLM_BASE_URL', llm.NVIDIA_URL)
@@ -31,20 +48,13 @@ def mock_nvidia(monkeypatch, content, status=200, finish_reason='stop'):
         assert request.url.path == '/v1/chat/completions'
         assert request.headers['authorization'] == 'Bearer fake-nvidia-key-for-tests'
         assert body['model'] == 'openai/gpt-oss-20b'
-        assert body['stream'] is False
+        assert body['stream'] is True
         assert body['max_tokens'] == 4096
         assert 'response_format' not in body
         assert 'JSON object' in body['messages'][0]['content']
         if status != 200:
             return httpx.Response(status, json={'error': {'message': 'Provider quota exceeded'}})
-        return httpx.Response(200, json={
-            'id': 'chatcmpl-demo', 'object': 'chat.completion', 'created': 0,
-            'model': 'openai/gpt-oss-20b',
-            'choices': [{'index': 0, 'finish_reason': finish_reason,
-                         'message': {'role': 'assistant', 'content': content,
-                                     'reasoning_content': 'INTERNAL_REASONING_NOT_FOR_OUTPUT'}}],
-            'usage': {'prompt_tokens': 30, 'completion_tokens': 20, 'total_tokens': 50},
-        })
+        return stream_response(content, finish_reason)
 
     def client(**kwargs):
         return RealOpenAI(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(handler)))
@@ -63,7 +73,7 @@ def test_nvidia_payload_validates_answer_and_ignores_reasoning(monkeypatch, fenc
     assert result.summary == '24 motorized rollers.'
     assert len(calls) == 1
     assert calls[0]['messages'][1]['role'] == 'user'
-    assert 'INTERNAL_REASONING' not in result.model_dump_json()
+    assert 'PRIVATE_REASONING' not in result.model_dump_json()
 
 
 @pytest.mark.parametrize('content', ['not JSON', '{"summary":"missing recommendation"}', '{}'])
@@ -79,6 +89,46 @@ def test_truncated_response_is_rejected(monkeypatch):
         llm.structured_chat(AgentNarrative, [('human', 'Project')])
 
 
+def test_stream_without_finish_marker_cannot_be_accepted(monkeypatch):
+    mock_nvidia(monkeypatch, '{"summary":"Apparently valid","recommendation":"Review"}', finish_reason=None)
+    with pytest.raises(ValueError, match='complete answer'):
+        llm.structured_chat(AgentNarrative, [('human', 'Project')])
+
+
+def test_streamed_body_timeout_discards_partial_answer_and_closes_stream(monkeypatch):
+    closed = []
+
+    class Interrupted(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'data: {"id":"partial","object":"chat.completion.chunk","created":0,"model":"openai/gpt-oss-20b","choices":[{"index":0,"delta":{"content":"PARTIAL_UNVERIFIED_ANSWER"},"finish_reason":null}]}\n\n'
+            raise httpx.ReadTimeout('Sensitive stream failure')
+
+        def close(self):
+            closed.append(True)
+
+    def handler(request):
+        assert json.loads(request.content)['stream'] is True
+        return httpx.Response(200, headers={'content-type': 'text/event-stream'}, stream=Interrupted())
+
+    monkeypatch.setattr(llm, 'OpenAI', lambda **kwargs: RealOpenAI(
+        **kwargs, http_client=httpx.Client(transport=httpx.MockTransport(handler))))
+    result = knowledge.answer_question('battery power', 'smart')
+    assert result['generation_mode'] == 'extractive_fallback'
+    assert result['generation_warning'].startswith('Chat provider timed out.')
+    assert 'PARTIAL_UNVERIFIED_ANSWER' not in json.dumps(result)
+    assert 'Sensitive stream failure' not in json.dumps(result)
+    assert closed
+
+
+def test_reasoning_chunks_cannot_reset_elapsed_collection_budget(monkeypatch):
+    mock_nvidia(monkeypatch, '{"summary":"Summary","recommendation":"Review"}')
+    ticks = iter([0, 31])
+    monkeypatch.setattr(llm, 'monotonic', lambda: next(ticks))
+    from openai import APITimeoutError
+    with pytest.raises(APITimeoutError):
+        llm.structured_chat(AgentNarrative, [('human', 'Project')], timeout_seconds=30, max_retries=0)
+
+
 def test_nvidia_runs_all_specialists_and_keeps_tool_prices(monkeypatch):
     calls = mock_nvidia(monkeypatch, json.dumps({'summary': 'Review the tool findings.', 'recommendation': 'Confirm the survey.'}))
     request = ProjectRequest(customer='Demo', project_name='NVIDIA integration demo',
@@ -89,7 +139,7 @@ def test_nvidia_runs_all_specialists_and_keeps_tool_prices(monkeypatch):
     assert result['reasoning_mode'] == 'live_ai'
     assert all(t['mode'] == 'llm' for t in result['traces'])
     assert result['costing']['total'] == 20404.27
-    assert 'INTERNAL_REASONING' not in json.dumps(result)
+    assert 'PRIVATE_REASONING' not in json.dumps(result)
 
 
 def test_nvidia_rag_keeps_citations(monkeypatch):
@@ -212,7 +262,8 @@ def test_openai_still_uses_native_structured_responses(monkeypatch):
 
 
 @pytest.mark.parametrize('timeout', [False, True])
-def test_direct_chat_diagnostic_is_independent_and_does_not_expose_secrets(monkeypatch, capsys, timeout):
+@pytest.mark.parametrize('stream', [False, True])
+def test_direct_chat_diagnostic_is_independent_and_does_not_expose_secrets(monkeypatch, capsys, timeout, stream):
     from scripts.check_chat import run_check
     calls = []
 
@@ -220,9 +271,12 @@ def test_direct_chat_diagnostic_is_independent_and_does_not_expose_secrets(monke
         calls.append(request)
         body = json.loads(request.content)
         assert body['messages'] == [{'role': 'user', 'content': 'Reply with exactly READY.'}]
+        assert body['stream'] is stream
         assert request.extensions['timeout']['read'] == 60
         if timeout:
             raise httpx.ReadTimeout('Sensitive transport details', request=request)
+        if stream:
+            return stream_response('PRIVATE_RESPONSE')
         return httpx.Response(200, json={
             'id': 'chatcmpl-probe', 'object': 'chat.completion', 'created': 0, 'model': 'openai/gpt-oss-20b',
             'choices': [{'index': 0, 'finish_reason': 'stop',
@@ -234,7 +288,7 @@ def test_direct_chat_diagnostic_is_independent_and_does_not_expose_secrets(monke
     monkeypatch.setenv('BUSINESS_DATA_SOURCE', 'supabase')
     monkeypatch.delenv('SUPABASE_URL', raising=False)
     monkeypatch.delenv('SUPABASE_SERVICE_ROLE_KEY', raising=False)
-    assert run_check(60) == (1 if timeout else 0)
+    assert run_check(60, stream=stream) == (1 if timeout else 0)
     assert len(calls) == 1
     output = capsys.readouterr().out
     assert ('Chat provider timed out.' if timeout else 'PASS: Provider returned complete answer text') in output
@@ -246,3 +300,7 @@ def test_direct_chat_diagnostic_does_not_send_without_a_key(monkeypatch, capsys)
     monkeypatch.delenv('LLM_API_KEY')
     assert run_check() == 2
     assert 'BLOCKED' in capsys.readouterr().out
+
+
+def test_nvidia_health_reports_streaming_transport():
+    assert llm.chat_info()['transport_mode'] == 'streaming'

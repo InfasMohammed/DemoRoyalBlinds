@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import llm
 
 
-def run_check(timeout=None):
+def run_check(timeout=None, stream=None):
     try:
         config = llm.chat_config()
         wait = timeout if timeout is not None else llm.qa_chat_timeout_seconds()
@@ -24,20 +24,14 @@ def run_check(timeout=None):
     if not config.api_key:
         print('BLOCKED: No chat key configured. Set it privately in backend/.env or your environment.')
         return 2
-    print(f'Provider: {config.provider}; model: {config.model}; I/O timeout: {wait:g}s; automatic retries: 0.', flush=True)
+    use_stream = config.provider == 'nvidia' if stream is None else stream
+    print(f'Provider: {config.provider}; model: {config.model}; streaming: {use_stream}; I/O timeout: {wait:g}s; automatic retries: 0.', flush=True)
     print('Sending one tiny synthetic request. No Supabase reads or RAG retrieval.', flush=True)
     started = monotonic()
     try:
-        with llm.OpenAI(base_url=config.base_url, api_key=config.api_key, timeout=wait, max_retries=0) as client:
-            response = client.chat.completions.create(
-                model=config.model,
-                messages=[{'role': 'user', 'content': 'Reply with exactly READY.'}],
-                temperature=1, top_p=1, max_tokens=4096, stream=False,
-            )
+        llm.request_chat_text(config, [{'role': 'user', 'content': 'Reply with exactly READY.'}],
+                              timeout_seconds=wait, max_retries=0, stream=use_stream)
         elapsed = monotonic() - started
-        if not response.choices or response.choices[0].finish_reason != 'stop' or not response.choices[0].message.content:
-            print(f'FAIL: Provider responded in {elapsed:.1f}s but did not return complete answer text.')
-            return 1
         print(f'PASS: Provider returned complete answer text in {elapsed:.1f}s. Response and reasoning text are not printed.')
         print('This verifies a minimal chat request only; it does not verify a full grounded Q&A answer.')
         return 0
@@ -51,5 +45,6 @@ def run_check(timeout=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--timeout', type=float, help='Provider I/O timeout, 5–120 seconds; defaults to the active Q&A setting.')
+    parser.add_argument('--no-stream', action='store_true', help='Compare with the older non-streaming request mode.')
     args = parser.parse_args()
-    raise SystemExit(run_check(args.timeout))
+    raise SystemExit(run_check(args.timeout, stream=False if args.no_stream else None))

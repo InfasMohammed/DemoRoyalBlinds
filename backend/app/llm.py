@@ -4,10 +4,12 @@ import math
 import os
 import re
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import TypeVar
 from urllib.parse import urlsplit
 
 from langchain_openai import ChatOpenAI
+from httpx import Request, TimeoutException
 from openai import APIStatusError, APITimeoutError, OpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -57,7 +59,56 @@ def chat_info():
     config = chat_config()
     return {'provider': config.provider, 'model': config.model, 'configured': bool(config.api_key),
             'response_mode': 'json_schema' if config.provider == 'openai' else 'validated_json_prompt',
+            'transport_mode': 'streaming' if config.provider == 'nvidia' else 'non_streaming',
             'qa_timeout_seconds': qa_chat_timeout_seconds(), 'qa_max_retries': 0}
+
+
+def request_chat_text(config: ChatConfig, messages, *, timeout_seconds, max_retries=0, stream=None):
+    """Collect final content only; NVIDIA's supplied example uses SSE streaming."""
+    use_stream = config.provider == 'nvidia' if stream is None else stream
+    started = monotonic()
+    request = Request('POST', config.base_url + '/chat/completions')
+    try:
+        with OpenAI(base_url=config.base_url, api_key=config.api_key,
+                    timeout=timeout_seconds, max_retries=max_retries) as client:
+            response = client.chat.completions.create(
+                model=config.model, messages=messages, temperature=1,
+                top_p=1, max_tokens=4096, stream=use_stream,
+            )
+            if use_stream:
+                parts = []
+                finish_reason = None
+                try:
+                    for chunk in response:
+                        # Reasoning/keepalive chunks must not extend collection indefinitely.
+                        # I/O timeout still applies while waiting for the next chunk.
+                        if monotonic() - started >= timeout_seconds:
+                            raise APITimeoutError(request=request)
+                        choice = next((c for c in (getattr(chunk, 'choices', None) or []) if c.index == 0), None)
+                        if choice is None:
+                            continue
+                        content_part = getattr(choice.delta, 'content', None)
+                        if content_part:
+                            parts.append(content_part)
+                        # Never collect, expose or parse delta.reasoning_content.
+                        if choice.finish_reason is not None:
+                            finish_reason = choice.finish_reason
+                            break
+                finally:
+                    response.close()
+                content = ''.join(parts)
+            else:
+                choice = response.choices[0] if response.choices else None
+                finish_reason = choice.finish_reason if choice else None
+                content = choice.message.content if choice else None
+        if finish_reason != 'stop':
+            raise ValueError('Provider did not return a complete answer.')
+        if not content:
+            raise ValueError('Provider returned no answer content.')
+        return content
+    except TimeoutException as exc:
+        # A streamed body's read timeout can escape the SDK as an HTTPX error.
+        raise APITimeoutError(request=request) from exc
 
 
 def structured_chat(schema: type[T], messages: list[tuple[str, str]], *,
@@ -82,17 +133,9 @@ def structured_chat(schema: type[T], messages: list[tuple[str, str]], *,
     for role, content in messages:
         if role != 'system':
             request_messages.append({'role': 'user' if role == 'human' else role, 'content': content})
-    with OpenAI(base_url=config.base_url, api_key=config.api_key,
-                timeout=timeout_seconds if timeout_seconds is not None else 45, max_retries=max_retries) as client:
-        completion = client.chat.completions.create(
-            model=config.model, messages=request_messages, temperature=1,
-            top_p=1, max_tokens=4096, stream=False,
-        )
-    if not completion.choices or completion.choices[0].finish_reason != 'stop':
-        raise ValueError('Provider did not return a complete answer.')
-    content = completion.choices[0].message.content
-    if not content:
-        raise ValueError('Provider returned no answer content.')
+    content = request_chat_text(config, request_messages,
+                                timeout_seconds=timeout_seconds if timeout_seconds is not None else 45,
+                                max_retries=max_retries)
     # Accommodate a single fenced JSON object, without scraping arbitrary prose
     # or using the model's separate reasoning_content field as an answer.
     match = re.fullmatch(r'\s*```(?:json)?\s*\n?(.*?)\n?```\s*', content, re.S)
