@@ -18,6 +18,7 @@ def nvidia_settings(monkeypatch):
     monkeypatch.delenv('NVIDIA_API_KEY', raising=False)
     monkeypatch.delenv('EMBEDDING_API_KEY', raising=False)
     monkeypatch.setenv('KNOWLEDGE_RETRIEVAL_MODE', 'local')
+    monkeypatch.delenv('QA_CHAT_TIMEOUT_SECONDS', raising=False)
 
 
 def mock_nvidia(monkeypatch, content, status=200, finish_reason='stop'):
@@ -106,8 +107,49 @@ def test_nvidia_rate_limit_falls_back_without_exposing_raw_errors(monkeypatch):
     mock_nvidia(monkeypatch, '', status=429)
     result = knowledge.answer_question('battery power', 'smart')
     assert result['generation_mode'] == 'extractive_fallback'
-    assert result['generation_warning'] == 'Chat provider quota or rate limit was reached.'
+    assert result['generation_warning'].startswith('Chat provider quota or rate limit was reached.')
+    assert 'Showing retrieved source excerpts instead' in result['generation_warning']
     assert 'Provider quota exceeded' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('configured_timeout', [None, '12.5'])
+def test_qa_transport_timeout_is_one_attempt_and_keeps_sources(monkeypatch, configured_timeout):
+    if configured_timeout is not None:
+        monkeypatch.setenv('QA_CHAT_TIMEOUT_SECONDS', configured_timeout)
+    calls = []
+    observed = {}
+
+    def handler(request):
+        calls.append(request)
+        expected_timeout = float(configured_timeout or '30')
+        assert request.extensions['timeout']['read'] == expected_timeout
+        payload = json.loads(request.content)
+        context = json.loads(payload['messages'][1]['content'])
+        assert all(set(p) == {'id', 'title', 'heading', 'content'} for p in context['passages'])
+        raise httpx.ReadTimeout('Sensitive transport error fake-nvidia-key-for-tests', request=request)
+
+    def client(**kwargs):
+        observed.update(kwargs)
+        return RealOpenAI(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+
+    monkeypatch.setattr(llm, 'OpenAI', client)
+    result = knowledge.answer_question('Can roller blinds use rechargeable battery power?', 'smart')
+    assert len(calls) == 1
+    assert observed['max_retries'] == 0
+    assert result['generation_mode'] == 'extractive_fallback'
+    assert result['generation_warning'].startswith('Chat provider timed out.')
+    assert 'Showing retrieved source excerpts instead' in result['generation_warning']
+    assert 'rechargeable battery' in result['answer']
+    assert any(c['id'] == 'RB-SMART-03' for c in result['citations'])
+    assert 'Sensitive transport error' not in json.dumps(result)
+    assert 'fake-nvidia-key' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('value', ['0', '121', 'nan', 'inf', 'bad-value'])
+def test_invalid_qa_timeout_is_rejected_by_health_configuration(monkeypatch, value):
+    monkeypatch.setenv('QA_CHAT_TIMEOUT_SECONDS', value)
+    with pytest.raises(ValueError, match='between 5 and 120'):
+        llm.chat_info()
 
 
 def test_nvidia_key_cannot_be_reused_for_openai_embeddings(monkeypatch):
@@ -161,7 +203,9 @@ def test_openai_still_uses_native_structured_responses(monkeypatch):
             return AgentNarrative(summary='Grounded summary', recommendation='Review')
 
     monkeypatch.setattr(llm, 'ChatOpenAI', Model)
-    result = llm.structured_chat(AgentNarrative, [('human', 'Project')])
+    result = llm.structured_chat(AgentNarrative, [('human', 'Project')], timeout_seconds=30, max_retries=0)
     assert observed['base_url'] == llm.OPENAI_URL
     assert observed['schema'] is AgentNarrative
+    assert observed['timeout'] == 30
+    assert observed['max_retries'] == 0
     assert result.summary == 'Grounded summary'

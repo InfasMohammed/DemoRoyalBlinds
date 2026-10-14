@@ -81,6 +81,8 @@ Enter your NVIDIA API key in `LLM_API_KEY` privately. An existing `NVIDIA_API_KE
 
 The NVIDIA adapter uses ordinary chat completions, asks for JSON and validates the answer with Pydantic. It does not assume NVIDIA supports OpenAI's strict JSON-schema API feature. The provider's separate `reasoning_content` is neither displayed nor saved. Invalid or incomplete output falls back to labeled tool summaries or source excerpts. OpenAI retains its native structured-response adapter. `/api/health` reports the selected provider/model and whether a key is configured, without returning credentials.
 
+Q&A makes one chat attempt with a default provider I/O timeout of 30 seconds and no automatic retries. A timeout or other provider failure returns the retrieved source excerpts with a clear warning. Set `QA_CHAT_TIMEOUT_SECONDS=60` in `backend/.env` and restart the backend if you prefer waiting longer for the provider (valid range: 5–120). This setting covers the chat call, not database reads, vector retrieval or a strict end-to-end deadline. It does not speed up the hosted model. Manufacturing-agent narrative calls retain their existing provider timeouts and retry behavior.
+
 With a key, all six nodes call the model with their calculated facts and record structured summaries and recommendations. Prices, dates and approval decisions still come from Python calculations. A provider failure is visibly labeled `rules_fallback`, not treated as successful AI execution. Key presence is only configuration evidence; confirm actual `llm` findings in the agent trace.
 
 The selected provider receives the submitted brief and relevant project facts. This prototype should use synthetic data. It does not enable external tracing automatically.

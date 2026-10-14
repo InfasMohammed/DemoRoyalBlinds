@@ -1,5 +1,6 @@
 """Validated chat adapter; provider keys never cross into the embedding route."""
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -42,19 +43,32 @@ def chat_enabled():
     return bool(chat_config().api_key)
 
 
+def qa_chat_timeout_seconds():
+    try:
+        value = float(os.getenv('QA_CHAT_TIMEOUT_SECONDS', '30'))
+    except ValueError:
+        raise ValueError('QA_CHAT_TIMEOUT_SECONDS must be a number between 5 and 120.') from None
+    if not math.isfinite(value) or not 5 <= value <= 120:
+        raise ValueError('QA_CHAT_TIMEOUT_SECONDS must be a number between 5 and 120.')
+    return value
+
+
 def chat_info():
     config = chat_config()
     return {'provider': config.provider, 'model': config.model, 'configured': bool(config.api_key),
-            'response_mode': 'json_schema' if config.provider == 'openai' else 'validated_json_prompt'}
+            'response_mode': 'json_schema' if config.provider == 'openai' else 'validated_json_prompt',
+            'qa_timeout_seconds': qa_chat_timeout_seconds(), 'qa_max_retries': 0}
 
 
-def structured_chat(schema: type[T], messages: list[tuple[str, str]]) -> T:
+def structured_chat(schema: type[T], messages: list[tuple[str, str]], *,
+                    timeout_seconds: float | None = None, max_retries: int = 1) -> T:
     config = chat_config()
     if not config.api_key:
         raise ValueError('Configure a chat provider key securely before enabling AI.')
     if config.provider == 'openai':
         model = ChatOpenAI(model=config.model, api_key=config.api_key, base_url=config.base_url,
-                           temperature=0, timeout=25, max_retries=1)
+                           temperature=0, timeout=timeout_seconds if timeout_seconds is not None else 25,
+                           max_retries=max_retries)
         return model.with_structured_output(schema).invoke(messages)
 
     # NVIDIA's example uses ordinary chat completions. Avoid assuming the hosted
@@ -68,7 +82,8 @@ def structured_chat(schema: type[T], messages: list[tuple[str, str]]) -> T:
     for role, content in messages:
         if role != 'system':
             request_messages.append({'role': 'user' if role == 'human' else role, 'content': content})
-    with OpenAI(base_url=config.base_url, api_key=config.api_key, timeout=45, max_retries=1) as client:
+    with OpenAI(base_url=config.base_url, api_key=config.api_key,
+                timeout=timeout_seconds if timeout_seconds is not None else 45, max_retries=max_retries) as client:
         completion = client.chat.completions.create(
             model=config.model, messages=request_messages, temperature=1,
             top_p=1, max_tokens=4096, stream=False,

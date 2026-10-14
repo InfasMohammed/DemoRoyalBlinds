@@ -10,7 +10,7 @@ from langchain_openai import OpenAIEmbeddings
 from pydantic import BaseModel, Field
 from supabase import create_client
 from .business_data import data_source, load_database_knowledge
-from .llm import chat_enabled, structured_chat, embedding_key, failure_reason, OPENAI_URL
+from .llm import chat_enabled, structured_chat, embedding_key, failure_reason, qa_chat_timeout_seconds, OPENAI_URL
 
 DATA = json.loads((Path(__file__).parent / 'data' / 'company_knowledge.json').read_text())
 STOP_WORDS = set('a an and are as at be by can do for from have how i in is it me of on or our that the their this to use what which with you your'.split())
@@ -259,8 +259,10 @@ def answer_question(question, category=None, product_id=None):
                      'Never infer model ratings, safety certification, universal weather protection, motor/brand compatibility or installation procedures. '
                      'Smart Solutions is a control layer, not proof every product is automated. Product listing titles do not supply specifications. '
                      'State missing evidence clearly. Return cited_chunk_ids containing only passages actually used.'),
-                    ('human', json.dumps({'question': question, 'passages': citations})),
-                ])
+                    ('human', json.dumps({'question': question, 'passages': [
+                        {key: citation[key] for key in ('id', 'title', 'heading', 'content')} for citation in citations
+                    ]})),
+                ], timeout_seconds=qa_chat_timeout_seconds(), max_retries=0)
                 valid_ids = {c['id'] for c in citations}
                 if not response.answer.strip() or not response.cited_chunk_ids or not set(response.cited_chunk_ids) <= valid_ids:
                     raise ValueError('Answer supplied unsupported citations.')
@@ -272,7 +274,8 @@ def answer_question(question, category=None, product_id=None):
                 generation_mode = 'llm'
             except Exception as exc:
                 generation_mode = 'extractive_fallback'
-                generation_warning = failure_reason(exc)
+                generation_warning = (failure_reason(exc) +
+                                      ' Showing retrieved source excerpts instead. You can try again.')
     return {**findings, 'question': question, 'answer': answer, 'generation_mode': generation_mode,
             'needs_review': needs_review or not citations, 'limitations': corpus['limitations'],
             'provenance': corpus['provenance'], 'generation_warning': generation_warning}
