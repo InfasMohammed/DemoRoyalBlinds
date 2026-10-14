@@ -211,6 +211,8 @@ Live OpenAI, NVIDIA and Supabase integration need your configured accounts and w
 
 Open **Product knowledge** in the dashboard. The supplied portfolio has eight internal product types (roller, Venetian, wooden, vertical, Roman, zebra roller, curtains and cubicle curtains) and seven external types (car parking shades, sail shades, bioclimatic pergolas, tensile shade structures, awnings, outdoor furniture and umbrellas). Smart Solutions is an automation/control layer across applicable products; universal compatibility is not assumed.
 
+Ask questions directly in the assistant; no source or product selection is required. Portfolio category filters affect browsing only. Product cards can open a focused source enquiry, but subsequent typed questions search all knowledge areas without retaining that context.
+
 The source register links company, internal, external and smart content to its supplied URLs and section headings. Individual linked product titles are included as listing evidence only. Original seed evidence is in [backend/app/data/company_knowledge.json](backend/app/data/company_knowledge.json). Database mode reads current passages and metadata from Supabase; offline mode uses this seed corpus. `backend/app/knowledge.py` ranks the selected corpus.
 
 Try these enquiries:
