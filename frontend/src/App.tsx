@@ -101,6 +101,21 @@ export default function App() {
     } catch (err) { setError((err as Error).message); setEditing(true) }
     finally { setBusy(false) }
   }
+  async function prepareFreshQuotation() {
+    if (!report) return
+    const brief = { ...report.request }
+    setBusy(true); setError('')
+    try {
+      const [runtime, business] = await Promise.all([api<Health>('/health'), api<Catalog>('/catalog')])
+      setHealth(runtime); setCatalog(business)
+      const expectedSource = runtime.storage_mode === 'supabase' ? 'supabase' : 'demo'
+      if (business.data_source !== expectedSource) {
+        throw new Error(`Switch business data to ${expectedSource === 'supabase' ? 'Supabase' : 'offline demo'} before analyzing a quotation for this execution environment.`)
+      }
+      setInput(brief); setApproving(false); setEditing(true)
+    } catch (err) { setError((err as Error).message) }
+    finally { setBusy(false) }
+  }
   function openReport(value: Report) {
     setReport(value); setInput(value.request); setPage('workspace'); setTab('overview'); setError('')
   }
@@ -128,6 +143,12 @@ export default function App() {
     setReport(current => current?.id === value.id ? value : current)
     setReports(current => current.map(item => item.id === value.id ? value : item))
   }, [])
+
+  const executionSource = health?.storage_mode === 'supabase' ? 'supabase' : 'demo'
+  const executionSourceIssue = report && health && !report.execution?.work_order
+    && report.data_snapshot?.data_source !== executionSource
+    ? `This saved quotation ${report.data_snapshot ? 'uses a different business data source' : 'has no captured business data'}. Create a fresh quotation using ${executionSource === 'supabase' ? 'Supabase' : 'offline demo'} business data and review it before execution.`
+    : null
 
   return <div className="app-shell">
     <aside className="sidebar no-print">
@@ -202,7 +223,9 @@ export default function App() {
             <section className="card decision-card"><div className="card-top"><div className={`icon-box ${report.status === 'blocked' ? 'amber' : 'green'}`}><Workflow size={22} /></div><span className="eyebrow">COORDINATOR'S DECISION</span></div><h2>{report.decision.headline}</h2><p className="muted">{report.decision.blockers.length ? 'The estimate is prepared. These constraints need a decision before the project can be approved.' : 'Material and schedule checks pass under the demo assumptions. Complete the human review before accepting the estimate.'}</p>
               {report.decision.blockers.length > 0 && <ul className="blocker-list">{report.decision.blockers.map(item => <li key={item}><CircleAlert size={17} /><span>{item}</span></li>)}</ul>}
               <div className="subheading">RECOMMENDED NEXT STEPS</div><ol className="action-list">{report.decision.actions.map((item, i) => <li key={item}><span>{String(i + 1).padStart(2, '0')}</span>{item}</li>)}</ol>
-              {report.approval ? <div className="approved-note"><CheckCircle2 size={18} /><span>Demo estimate approved by {report.approval.reviewer}. Post-approval actions are tracked in the Work order tab.</span></div> : <div className="approval-footer"><span><ShieldCheck size={16} /> Human review gate</span><button className="button primary" disabled={report.status === 'blocked' || busy} onClick={() => setApproving(true)}>Review estimate <ArrowRight size={16} /></button></div>}
+              {executionSourceIssue && <div className="inline-warning"><CircleAlert size={16} />{executionSourceIssue}</div>}
+              {executionSourceIssue && <button className="button secondary" disabled={busy} onClick={() => void prepareFreshQuotation()}>Create fresh quotation <ArrowRight size={16} /></button>}
+              {report.approval ? <div className="approved-note"><CheckCircle2 size={18} /><span>Demo estimate approved by {report.approval.reviewer}. Post-approval actions are tracked in the Work order tab.</span></div> : <div className="approval-footer"><span><ShieldCheck size={16} /> Human review gate</span><button className="button primary" disabled={report.status === 'blocked' || busy || !!executionSourceIssue} onClick={() => setApproving(true)}>Review estimate <ArrowRight size={16} /></button></div>}
             </section>
             <section className="card findings-preview"><div className="section-heading"><h3>Specialist findings</h3><button className="text-link" onClick={() => setTab('agents')}>View evidence <ArrowRight size={15} /></button></div>{report.traces.slice(0, 3).map(item => <div className="finding-row" key={item.agent}><span className="finding-dot" /><div><h4>{item.agent}</h4><p>{item.summary}</p></div></div>)}</section>
           </div><div>
@@ -211,7 +234,7 @@ export default function App() {
             </section>
             <section className="card scope-card"><h3>Project specification</h3><dl><dt>Product</dt><dd>{report.requirements.product_name}</dd><dt>Opening size</dt><dd>{report.requirements.dimensions}</dd><dt>Total coverage</dt><dd>{report.requirements.area_sqm} m²</dd><dt>Requested completion</dt><dd>{day(report.request.due_date)}</dd><dt>Scope</dt><dd>{report.requirements.scope}</dd></dl><p className="fine-print">Form fields drive calculations. Brief text supplies context; measurements are provisional.</p></section>
           </div></div>}
-          {tab === 'execution' && <ExecutionPanel report={report} onUpdate={updateExecution} />}
+          {tab === 'execution' && <ExecutionPanel report={report} onUpdate={updateExecution} sourceIssue={executionSourceIssue} onReanalyze={() => void prepareFreshQuotation()} reanalyzeDisabled={busy} />}
           {tab === 'agents' && <section className="card agent-findings"><div className="section-heading"><div><span className="eyebrow">TRACEABLE EXECUTION</span><h3>What each specialist found</h3></div><span className="pill neutral">{modeLabel(report.reasoning_mode)}</span></div><p className="muted">Validated tools control numbers and approval gates. Optional AI explains the findings using the supplied evidence.</p>{report.traces.map((item, i) => {
             const Icon = agents.find(a => item.agent.startsWith(a.name))?.icon || Workflow
             return <article className="trace-card" key={item.agent}><div className="trace-index">{String(i + 1).padStart(2, '0')}</div><div className="trace-content"><div className="trace-heading"><h3><Icon size={19} />{item.agent}</h3><span className={`pill ${item.mode === 'rules_fallback' ? 'amber' : 'neutral'}`}>{item.mode === 'llm' ? 'AI + tools' : item.mode === 'rules_fallback' ? 'Rules · AI unavailable' : 'Validated rules'}</span></div><div className="trace-role">{item.role} · {item.duration_ms} ms</div><p>{item.summary}</p>{item.fallback_reason && <div className="inline-warning"><CircleAlert size={16} />{item.fallback_reason}</div>}{item.recommendation && <p className="recommendation">{item.recommendation}</p>}<div className="source-tags">{item.sources.map(source => <span key={source}><FileText size={12} />{source}</span>)}</div>{item.citations && item.citations.length > 0 && <div className="trace-citations">{item.citations.map(citation => <a href={citation.source_url} key={citation.id} target="_blank" rel="noopener noreferrer"><BookOpen size={12} />{citation.heading}<ArrowUpRight size={12} /></a>)}</div>}<button className="text-link evidence-toggle" aria-expanded={expanded === item.agent} onClick={() => setExpanded(expanded === item.agent ? null : item.agent)}>Inspect tool evidence <ChevronDown size={15} /></button>{expanded === item.agent && <pre className="evidence">{JSON.stringify(item.facts, null, 2)}</pre>}</div></article>

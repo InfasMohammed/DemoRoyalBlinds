@@ -16,7 +16,10 @@ const actions: Record<string, { action: WorkAction; label: string }[]> = {
 }
 const day = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-GB')
 
-export default function ExecutionPanel({ report, onUpdate }: { report: Report; onUpdate: (report: Report) => void }) {
+export default function ExecutionPanel({ report, onUpdate, sourceIssue, onReanalyze, reanalyzeDisabled }: {
+  report: Report; onUpdate: (report: Report) => void; sourceIssue: string | null;
+  onReanalyze: () => void; reanalyzeDisabled: boolean;
+}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [action, setAction] = useState<{ action: WorkAction; label: string } | null>(null)
@@ -24,6 +27,7 @@ export default function ExecutionPanel({ report, onUpdate }: { report: Report; o
   const execution = report.execution
   const order = execution?.work_order
   const quality = execution?.tasks.filter(t => t.stage === 'quality') || []
+  const needsFreshQuotation = !order && (!!sourceIssue || /analy[sz]e.*(?:new|fresh)/i.test(execution?.reason || ''))
 
   useEffect(() => {
     if (execution?.status !== 'queued') return
@@ -54,13 +58,13 @@ export default function ExecutionPanel({ report, onUpdate }: { report: Report; o
     finally { setBusy(false) }
   }
 
-  if (!execution) return <section className="card execution-panel"><ClipboardCheck size={24} /><h3>Human approval opens the next stage.</h3><p>{report.status === 'demo_approved' ? 'This report was approved before execution was available. Analyze and approve a new project to create a work order.' : 'Approve the quotation and authorize demo actions to reserve material, book capacity and create work-order tasks.'}</p></section>
+  if (!execution) return <section className="card execution-panel"><ClipboardCheck size={24} /><h3>{sourceIssue || report.status === 'demo_approved' ? 'A fresh quotation is required.' : 'Human approval opens the next stage.'}</h3><p>{sourceIssue || (report.status === 'demo_approved' ? 'This report was approved before execution was available. Analyze and approve a new project to create a work order.' : 'Approve the quotation and authorize demo actions to reserve material, book capacity and create work-order tasks.')}</p>{(sourceIssue || report.status === 'demo_approved') && <button className="button secondary" disabled={reanalyzeDisabled} onClick={onReanalyze}>Create fresh quotation</button>}</section>
 
   return <section className="card execution-panel">
     <div className="section-heading"><div><span className="eyebrow">POST-APPROVAL WORKFLOW</span><h3>Work order & execution</h3></div><span className={`pill ${execution.status === 'blocked' || quality.some(t => t.status === 'failed') ? 'amber' : 'green'}`}>{order ? quality.some(t => t.status === 'failed') ? 'Quality hold' : labels[order.status] : execution.status === 'queued' ? 'Queued for execution' : 'Needs attention'}</span></div>
     {error && <div className="inline-warning" role="alert"><CircleAlert size={16} />{error}</div>}
     {execution.reason && <div className="inline-warning"><CircleAlert size={16} />{execution.reason}</div>}
-    {!order && <div className="execution-pending"><p>{execution.status === 'queued' ? 'Approval is stored. The worker will recover this job if the backend restarts.' : 'Approval is recorded; actions stopped before resources were committed. Resolve the issue, then retry. Changed quote terms require a fresh analysis and approval.'}</p><button className="button secondary" disabled={busy} onClick={() => void retry()}>{busy ? <LoaderCircle size={16} className="spin" /> : <RefreshCw size={16} />}Retry execution</button></div>}
+    {!order && <div className="execution-pending"><p>{needsFreshQuotation ? 'Approval is recorded, but this quotation cannot commit resources. Create a fresh quotation from this brief, check the deadline, analyze it with current business data and approve the new result. The original report remains in the audit; its approval is not transferred.' : execution.status === 'queued' ? 'Approval is stored. The worker will recover this job if the backend restarts.' : 'Approval is recorded; actions stopped before resources were committed. Resolve the issue, then retry. Changed quote terms require a fresh analysis and approval.'}</p>{needsFreshQuotation ? <button className="button secondary" disabled={busy || reanalyzeDisabled} onClick={onReanalyze}>Create fresh quotation</button> : <button className="button secondary" disabled={busy} onClick={() => void retry()}>{busy ? <LoaderCircle size={16} className="spin" /> : <RefreshCw size={16} />}Retry execution</button>}</div>}
     {order && <>
       <p className="muted">Work order {order.id.slice(0, 8)} · {report.request.quantity} {report.requirements.product_name.toLowerCase()} · {report.request.site}</p>
       <div className="execution-summary"><div><Package size={18} /><span>Material {execution.reservation?.status === 'active' ? 'reserved' : execution.reservation?.status}</span><strong>{execution.reservation?.quantity_lm} lm</strong></div><div><Factory size={18} /><span>Booked manufacturing</span><strong>{day(order.production_plan.manufacture_start)} – {day(order.production_plan.manufacture_end)}</strong></div><div><CalendarDays size={18} /><span>Booked completion</span><strong>{day(order.production_plan.completion_date)}</strong></div></div>

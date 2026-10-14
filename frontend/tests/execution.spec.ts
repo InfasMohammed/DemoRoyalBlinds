@@ -1,5 +1,57 @@
 import { expect, test } from '@playwright/test'
 
+for (const variant of ['missing snapshot', 'different source', 'before approval']) {
+  test(`legacy quotation recovery: ${variant}`, async ({ page, request }) => {
+    const catalog = await (await request.get('/api/catalog')).json()
+    const runtime = await (await request.get('/api/health')).json()
+    const preset = catalog.scenarios.find((item: { id: string }) => item.id === 'ready')
+    const due = new Date(`${runtime.today}T12:00:00Z`)
+    due.setUTCDate(due.getUTCDate() + 60)
+    const saved = await (await request.post('/api/projects/analyze', { data: {
+      ...preset.request, project_name: `Legacy ${variant}`, quantity: 4, due_date: due.toISOString().slice(0, 10),
+    } })).json()
+    const legacy = { ...saved }
+    if (variant === 'different source') legacy.data_snapshot = { ...saved.data_snapshot, data_source: 'supabase' }
+    else delete legacy.data_snapshot
+    if (variant !== 'before approval') {
+      legacy.status = 'demo_approved'
+      legacy.approval = { reviewer: 'Original reviewer', approved_at: saved.created_at, scope: 'Original review' }
+      legacy.execution = {
+        status: 'blocked', reason: 'Analyze a new quotation using Supabase business data before execution.',
+        work_order: null, reservation: null, tasks: [], bookings: [], events: [], agent_findings: [], updated_at: saved.created_at,
+      }
+    }
+    const oldActions: string[] = []
+    page.on('request', req => {
+      if (req.method() === 'POST' && req.url().includes(saved.id)) oldActions.push(req.url())
+    })
+    await page.route('**/api/projects', route => route.fulfill({ json: [legacy] }))
+    await page.goto('/')
+    await page.getByRole('button', { name: /Project reports/ }).click()
+    await page.getByRole('button', { name: 'Open', exact: true }).click()
+    if (variant === 'before approval') await expect(page.getByRole('button', { name: 'Review estimate' })).toBeDisabled()
+    await page.getByRole('tab', { name: 'Work order', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Retry execution' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Create fresh quotation', exact: true }).click()
+    await expect(page.getByRole('dialog').getByLabel('Project name', { exact: true })).toHaveValue(saved.request.project_name)
+    await expect(page.getByRole('dialog').getByLabel('Customer / organization')).toHaveValue(saved.request.customer)
+    const analyzed = page.waitForResponse(response => response.url().endsWith('/api/projects/analyze') && response.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Analyze project', exact: true }).click()
+    const fresh = await (await analyzed).json()
+    expect(fresh.id).not.toBe(saved.id)
+    expect(fresh.approval).toBeUndefined()
+    expect(fresh.execution).toBeUndefined()
+    expect(fresh.data_snapshot.data_source).toBe('demo')
+    await expect(page.getByRole('button', { name: 'Review estimate' })).toBeEnabled()
+    expect(oldActions).toEqual([])
+    await page.getByRole('button', { name: /Project reports/ }).click()
+    // Reports keep both analyses; the original approval is never copied to the new result.
+    await expect(page.getByRole('row').filter({ hasText: saved.request.project_name })).toHaveCount(2)
+    await expect(page.getByRole('row').filter({ hasText: saved.id.slice(0, 8) })).toContainText(
+      variant === 'before approval' ? 'Awaiting review' : 'Demo approved')
+  })
+}
+
 test('approval reserves material, production consumes it and quality gates installation', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /The clear-to-review order/ }).click()
