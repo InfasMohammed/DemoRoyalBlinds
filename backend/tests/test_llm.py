@@ -209,3 +209,40 @@ def test_openai_still_uses_native_structured_responses(monkeypatch):
     assert observed['timeout'] == 30
     assert observed['max_retries'] == 0
     assert result.summary == 'Grounded summary'
+
+
+@pytest.mark.parametrize('timeout', [False, True])
+def test_direct_chat_diagnostic_is_independent_and_does_not_expose_secrets(monkeypatch, capsys, timeout):
+    from scripts.check_chat import run_check
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        body = json.loads(request.content)
+        assert body['messages'] == [{'role': 'user', 'content': 'Reply with exactly READY.'}]
+        assert request.extensions['timeout']['read'] == 60
+        if timeout:
+            raise httpx.ReadTimeout('Sensitive transport details', request=request)
+        return httpx.Response(200, json={
+            'id': 'chatcmpl-probe', 'object': 'chat.completion', 'created': 0, 'model': 'openai/gpt-oss-20b',
+            'choices': [{'index': 0, 'finish_reason': 'stop',
+                         'message': {'role': 'assistant', 'content': 'PRIVATE_RESPONSE', 'reasoning_content': 'PRIVATE_REASONING'}}],
+        })
+
+    monkeypatch.setattr(llm, 'OpenAI', lambda **kwargs: RealOpenAI(
+        **kwargs, http_client=httpx.Client(transport=httpx.MockTransport(handler))))
+    monkeypatch.setenv('BUSINESS_DATA_SOURCE', 'supabase')
+    monkeypatch.delenv('SUPABASE_URL', raising=False)
+    monkeypatch.delenv('SUPABASE_SERVICE_ROLE_KEY', raising=False)
+    assert run_check(60) == (1 if timeout else 0)
+    assert len(calls) == 1
+    output = capsys.readouterr().out
+    assert ('Chat provider timed out.' if timeout else 'PASS: Provider returned complete answer text') in output
+    assert all(secret not in output for secret in ('fake-nvidia-key', 'Sensitive transport', 'PRIVATE_RESPONSE', 'PRIVATE_REASONING'))
+
+
+def test_direct_chat_diagnostic_does_not_send_without_a_key(monkeypatch, capsys):
+    from scripts.check_chat import run_check
+    monkeypatch.delenv('LLM_API_KEY')
+    assert run_check() == 2
+    assert 'BLOCKED' in capsys.readouterr().out
